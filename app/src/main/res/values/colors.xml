@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="bg_dark">#0B1020</color>
+    <color name="card_dark">#161E33</color>
+    <color name="card_elevated">#1C2642</color>
+    <color name="border_color">#222D4A</color>
+    <color name="border_active">#3D507F</color>
+
+    <color name="accent_blue">#6F91FF</color>
+    <color name="accent_cyan">#00E5FF</color>
+    <color name="accent_green">#52D6A3</color>
+    <color name="accent_amber">#FFB74D</color>
+    <color name="accent_red">#FF5252</color>
+
+    <color name="text_primary">#F1F5FF</color>
+    <color name="text_secondary">#97A3BE</color>
+    <color name="text_tertiary">#5E6D8F</color>
+
+    <color name="radar_grid">#1F2F50</color>
+    <color name="radar_sweep_start">#0000E5FF</color>
+    <color name="radar_sweep_end">#5500E5FF</color>
+    <color name="radar_blip">#52D6A3</color>
+    <color name="radar_target">#00E5FF</color>
+</resources>

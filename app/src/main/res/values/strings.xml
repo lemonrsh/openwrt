@@ -1,0 +1,20 @@
+<resources>
+    <string name="app_name">OpenWrt Scanner</string>
+    <string name="scan_lan">Scan LAN</string>
+    <string name="scan_tailscale">Scan Tailscale (Root)</string>
+    <string name="scan_all">Scan Both</string>
+    <string name="scanning_lan">Scanning LAN subnet…</string>
+    <string name="scanning_tailscale">Querying Tailscale via root…</string>
+    <string name="status_idle">Ready to scan LAN &amp; Tailscale</string>
+    <string name="router_found">OpenWrt Router Detected!</string>
+    <string name="ssh_available">SSH (Port 22) Available</string>
+    <string name="ssh_unavailable">SSH Closed</string>
+    <string name="connect_title">Connect to OpenWrt</string>
+    <string name="username">Username</string>
+    <string name="password">Password</string>
+    <string name="port">Port</string>
+    <string name="connect_btn">Connect via SSH</string>
+    <string name="open_luci">Open LuCI Web UI</string>
+    <string name="copy_cmd">Copy SSH Command</string>
+    <string name="cancel">Cancel</string>
+</resources>
