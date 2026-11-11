@@ -37,34 +37,31 @@ jobs:
 
       - name: Build Debug APK
         run: |
-          ./gradlew assembleDebug --no-daemon --stacktrace 2>&1 | tee build.log || {
-            ERR=$(tail -n 25 build.log | tr '\n' ' ' | sed 's/[^a-zA-Z0-9 :._\/-]//g')
-            echo "::error title=GradleBuildError::$ERR"
-            exit 1
-          }
+          ./gradlew assembleDebug --no-daemon --stacktrace
+          mkdir -p release_apk
+          echo "=== Found APKs ==="
+          find . -name "*.apk" -ls
+          find . -name "*.apk" -exec cp -v {} release_apk/openwrt-scanner.apk \;
+          cp -v release_apk/openwrt-scanner.apk release_apk/OpenWrtScanner-v1.0.0.apk || true
 
       - name: Upload Debug APK Artifact
         uses: actions/upload-artifact@v4
         with:
           name: openwrt-scanner-debug-apk
-          path: app/build/outputs/apk/debug/*.apk
-          if-no-files-found: error
+          path: release_apk/*.apk
+          if-no-files-found: warn
 
       - name: Attach APK to GitHub Release
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          APK_PATH=$(find app/build/outputs/apk/debug -name "*.apk" | head -n 1)
-          if [ -n "$APK_PATH" ] && [ -f "$APK_PATH" ]; then
-            echo "Found compiled APK: $APK_PATH"
-            cp "$APK_PATH" ./openwrt-scanner.apk
-            cp "$APK_PATH" ./openwrt-scanner-v1.0.0.apk
-
+          if [ -f "release_apk/openwrt-scanner.apk" ]; then
             TARGET_TAG="${{ github.event.release.tag_name }}"
             if [ -z "$TARGET_TAG" ]; then
               TARGET_TAG=$(gh release view --json tagName --jq .tagName 2>/dev/null || echo "v1.0.0")
             fi
-
-            echo "Uploading APK to release: $TARGET_TAG"
-            gh release upload "$TARGET_TAG" ./openwrt-scanner.apk ./openwrt-scanner-v1.0.0.apk --clobber || true
+            echo "Uploading APK to GitHub Release: $TARGET_TAG"
+            gh release upload "$TARGET_TAG" release_apk/openwrt-scanner.apk release_apk/OpenWrtScanner-v1.0.0.apk --clobber || true
+          else
+            echo "No APK found in release_apk/"
           fi
