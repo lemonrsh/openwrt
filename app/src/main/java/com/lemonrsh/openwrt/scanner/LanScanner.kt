@@ -160,13 +160,13 @@ class LanScanner(private val context: Context) {
                         val tokens = line!!.split("\\s+".toRegex())
                         if (tokens.size >= 3 && tokens[1] == "00000000") {
                             val hexGw = tokens[2]
-                            val gwLong = hexGw.toLong(16)
+                            val gw = hexGw.toLong(16).toInt()
                             return String.format(
                                 "%d.%d.%d.%d",
-                                gwLong and 0xFF,
-                                (gwLong shr 8) and 0xFF,
-                                (gwLong shr 16) and 0xFF,
-                                (gwLong shr 24) and 0xFF
+                                gw and 0xFF,
+                                (gw shr 8) and 0xFF,
+                                (gw shr 16) and 0xFF,
+                                (gw shr 24) and 0xFF
                             )
                         }
                     }
