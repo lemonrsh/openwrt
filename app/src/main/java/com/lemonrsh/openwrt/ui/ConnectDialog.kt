@@ -486,7 +486,7 @@ class ConnectDialog(
     private fun copySshCommand() {
         val user = usernameInput.text.toString().trim().ifBlank { "root" }
         val port = portInput.text.toString().toIntOrNull() ?: 22
-        val cmd = if (port == 22) "ssh $user@${router.ip}" else "ssh -p $port $user@${router.ip}"
+        val cmd = com.lemonrsh.openwrt.util.CertificateHelper.buildSshCommand(user, router.ip, port, autoAcceptCert = true)
 
         val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
         val clip = ClipData.newPlainText("OpenWrt SSH Command", cmd)

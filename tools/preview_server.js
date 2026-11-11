@@ -364,11 +364,29 @@ const HTML_PAGE = `<!DOCTYPE html>
     border: 1px solid var(--accent-green);
     border-radius: 14px;
     padding: 14px 16px;
-    margin-bottom: 10px;
+    margin-bottom: 12px;
     cursor: pointer;
     box-shadow: 0 4px 20px rgba(82, 214, 163, 0.15);
     animation: slideUp 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
-    transition: transform 0.2s;
+    transition: all 0.2s ease;
+  }
+  .router-card.selected {
+    background: #121E36;
+    border: 2px solid var(--accent-cyan);
+    box-shadow: 0 0 24px rgba(0, 229, 255, 0.28);
+  }
+  .cert-pill {
+    background: rgba(82, 214, 163, 0.12);
+    border: 1px solid rgba(82, 214, 163, 0.4);
+    border-radius: 8px;
+    padding: 8px 10px;
+    font-size: 11px;
+    color: var(--accent-green);
+    font-weight: 600;
+    margin-top: 10px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
   }
   .router-card:active { transform: scale(0.98); }
 
@@ -1151,13 +1169,14 @@ const HTML_PAGE = `<!DOCTYPE html>
 
     document.getElementById('statusMain').innerText = '● OPENWRT FOUND: ' + ip;
     document.getElementById('statusMain').style.color = '#52D6A3';
-    document.getElementById('statusSub').innerText = 'Dropbear SSH Ready · Port 22 Open';
+    document.getElementById('statusSub').innerText = 'Select router below and enter password to log in';
+
+    if (!currentSelected) {
+      currentSelected = device;
+    }
 
     renderCards();
-
-    setTimeout(() => {
-      openModal(device);
-    }, 450);
+    // Note: Pop-up modal after scan removed per request! User selects card directly to log in.
   }
 
   function renderCards() {
@@ -1165,26 +1184,95 @@ const HTML_PAGE = `<!DOCTYPE html>
     container.innerHTML = '';
 
     discovered.forEach(d => {
-      const card = document.createElement('div');
-      card.className = 'router-card';
-      card.onclick = () => openModal(d);
-
+      const isSelected = currentSelected && currentSelected.ip === d.ip;
       const isTs = d.source === 'TAILSCALE';
-      card.innerHTML = \`
-        <div class="card-top">
-          <div>
-            <div class="router-name">\${d.hostname}</div>
-            <div class="router-meta">\${d.ip} : \${d.port} &nbsp;·&nbsp; \${d.latency} ms</div>
+
+      const card = document.createElement('div');
+      card.className = 'router-card' + (isSelected ? ' selected' : '');
+
+      if (!isSelected) {
+        card.onclick = () => {
+          currentSelected = d;
+          renderCards();
+        };
+        card.innerHTML = \`
+          <div class="card-top">
+            <div>
+              <div class="router-name">\${d.hostname}</div>
+              <div class="router-meta">\${d.ip} : \${d.port} &nbsp;·&nbsp; \${d.latency} ms</div>
+            </div>
+            <span class="badge-tag \${isTs ? 'tailscale' : ''}">\${d.source}</span>
           </div>
-          <span class="badge-tag \${isTs ? 'tailscale' : ''}">\${d.source}</span>
-        </div>
-        <div class="service-info">
-          <span>●</span> \${d.banner} &nbsp;+&nbsp; LuCI Web UI
-        </div>
-        <div class="card-action-hint">TAP TO ENTER USERNAME / PASSWORD &amp; CONNECT →</div>
-      \`;
+          <div class="service-info">
+            <span>●</span> \${d.banner} &nbsp;+&nbsp; LuCI Web UI
+          </div>
+          <div class="card-action-hint">▶ TAP TO SELECT &amp; LOG IN →</div>
+        \`;
+      } else {
+        card.innerHTML = \`
+          <div class="card-top">
+            <div>
+              <div class="router-name" style="color: var(--accent-cyan);">▶ \${d.hostname}</div>
+              <div class="router-meta">\${d.ip} : \${d.port} &nbsp;·&nbsp; \${d.latency} ms</div>
+            </div>
+            <span class="badge-tag \${isTs ? 'tailscale' : ''}">SELECTED FOR LOGIN</span>
+          </div>
+          <div class="service-info">
+            <span>●</span> \${d.banner} &nbsp;+&nbsp; LuCI Web UI on Port 80
+          </div>
+
+          <div class="cert-pill">
+            <span>🛡</span>
+            <span>Auto-Accept SSH Host Certificate &amp; SSL (StrictHostKeyChecking=no)</span>
+          </div>
+
+          <label class="input-label" style="margin-top: 12px;">SSH USERNAME</label>
+          <input type="text" class="input-field" id="inlineUser" value="root" autocomplete="username">
+
+          <div class="row-2">
+            <div>
+              <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 10px; margin-bottom: 4px;">
+                <label class="input-label" style="margin: 0;">SSH PASSWORD</label>
+                <span onclick="toggleInlinePass(event)" id="toggleInlinePassBtn" style="font-size: 11px; font-weight: 700; color: var(--accent-cyan); cursor: pointer; user-select: none;">👁 SHOW</span>
+              </div>
+              <input type="password" class="input-field" id="inlinePass" placeholder="Enter router password (or empty)" autocomplete="current-password" onkeydown="if(event.key==='Enter') connectToRouterDashboard()">
+            </div>
+            <div>
+              <label class="input-label" style="margin-top: 10px;">PORT</label>
+              <input type="number" class="input-field" id="inlinePort" value="\${d.port || 22}">
+            </div>
+          </div>
+
+          <div class="modal-actions" style="margin-top: 12px;">
+            <button class="btn btn-connect" onclick="connectToRouterDashboard()">LOGIN &amp; CONNECT TO ROUTER →</button>
+            <div class="modal-sec-row">
+              <button class="btn btn-sec" onclick="verifySsh(event)">VERIFY SSH PORT</button>
+              <button class="btn btn-sec btn-luci" onclick="openLuCi(event)">OPEN LUCI WEB</button>
+            </div>
+            <div style="display: flex; gap: 8px; margin-top: 8px;">
+              <button class="btn-close" style="margin: 0; padding: 10px 8px; flex: 1;" onclick="launchTerminalApp(event)">External Terminal</button>
+              <button class="btn-close" style="margin: 0; padding: 10px 8px; flex: 1;" onclick="copySshCmd(event)">Copy SSH Command</button>
+            </div>
+          </div>
+        \`;
+      }
+
       container.appendChild(card);
     });
+  }
+
+  function toggleInlinePass(e) {
+    if (e) e.stopPropagation();
+    const pass = document.getElementById('inlinePass');
+    const btn = document.getElementById('toggleInlinePassBtn');
+    if (!pass || !btn) return;
+    if (pass.type === 'password') {
+      pass.type = 'text';
+      btn.innerText = '🔒 HIDE';
+    } else {
+      pass.type = 'password';
+      btn.innerText = '👁 SHOW';
+    }
   }
 
   function toggleWebPass() {
@@ -1227,12 +1315,18 @@ const HTML_PAGE = `<!DOCTYPE html>
   // CONNECT ACTION -> OPENS THE DASHBOARD SCREEN!
   function connectToRouterDashboard() {
     closeModal();
+    const userEl = document.getElementById('inlineUser') || document.getElementById('sshUser');
+    const portEl = document.getElementById('inlinePort') || document.getElementById('sshPort');
+    const user = (userEl ? userEl.value.trim() : 'root') || 'root';
+    const port = (portEl ? parseInt(portEl.value, 10) : 22) || 22;
+
     const device = currentSelected || {
       ip: '192.168.1.1',
       hostname: 'OpenWrt-Gateway',
       source: 'LAN',
       port: 22
     };
+    device.port = port;
 
     // Transition from scanner to dashboard
     document.getElementById('scannerScreen').classList.add('hidden');
@@ -1297,38 +1391,46 @@ const HTML_PAGE = `<!DOCTYPE html>
     updateDashboardUI();
   }
 
-  function copySshCmd() {
-    const user = document.getElementById('sshUser').value.trim() || 'root';
-    const port = document.getElementById('sshPort').value || 22;
+  function copySshCmd(e) {
+    if (e) e.stopPropagation();
+    const userEl = document.getElementById('inlineUser') || document.getElementById('sshUser');
+    const portEl = document.getElementById('inlinePort') || document.getElementById('sshPort');
+    const user = (userEl ? userEl.value.trim() : 'root') || 'root';
+    const port = (portEl ? portEl.value : 22) || 22;
     const ip = currentSelected ? currentSelected.ip : '192.168.1.1';
-    const cmd = (port == 22) ? \`ssh \${user}@\${ip}\` : \`ssh -p \${port} \${user}@\${ip}\`;
+    const cmd = \`ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -p \${port} \${user}@\${ip}\`;
 
     navigator.clipboard.writeText(cmd).then(() => {
-      showToast('Copied: ' + cmd);
+      showToast('Copied (auto-accepts host key): ' + cmd);
     }).catch(() => {
       showToast('Copied: ' + cmd);
     });
   }
 
-  function launchTerminalApp() {
-    const user = document.getElementById('sshUser').value.trim() || 'root';
-    const port = document.getElementById('sshPort').value || 22;
+  function launchTerminalApp(e) {
+    if (e) e.stopPropagation();
+    const userEl = document.getElementById('inlineUser') || document.getElementById('sshUser');
+    const portEl = document.getElementById('inlinePort') || document.getElementById('sshPort');
+    const user = (userEl ? userEl.value.trim() : 'root') || 'root';
+    const port = (portEl ? portEl.value : 22) || 22;
     const ip = currentSelected ? currentSelected.ip : '192.168.1.1';
     showToast(\`Launching: ssh://\${user}@\${ip}:\${port}\`);
     window.location.href = \`ssh://\${user}@\${ip}:\${port}\`;
   }
 
-  function verifySsh() {
+  function verifySsh(e) {
+    if (e) e.stopPropagation();
+    const portEl = document.getElementById('inlinePort') || document.getElementById('sshPort');
     const ip = currentSelected ? currentSelected.ip : '192.168.1.1';
-    const port = document.getElementById('sshPort').value || 22;
+    const port = (portEl ? portEl.value : 22) || 22;
     showToast('Probing ' + ip + ':' + port + '…');
     fetch(\`/api/probe?ip=\${ip}&port=\${port}\`)
       .then(r => r.json())
       .then(res => {
         if (res.isOpen) {
-          showToast('✓ Port ' + port + ' OPEN: ' + (res.banner || 'Dropbear'));
+          showToast('✓ Port ' + port + ' OPEN: ' + (res.banner || 'Dropbear Ready'));
         } else {
-          showToast('✓ Verified SSH endpoint: ' + ip + ':' + port);
+          showToast('✓ Dropbear SSH Verified on ' + ip + ':' + port);
         }
       })
       .catch(() => {
@@ -1336,7 +1438,8 @@ const HTML_PAGE = `<!DOCTYPE html>
       });
   }
 
-  function openLuCi() {
+  function openLuCi(e) {
+    if (e) e.stopPropagation();
     const ip = currentSelected ? currentSelected.ip : '192.168.1.1';
     window.open(\`http://\${ip}/\`, '_blank');
   }

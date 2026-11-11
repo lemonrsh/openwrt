@@ -62,7 +62,9 @@ object OpenWrtProbe {
     fun probeLuCi(ip: String, timeoutMs: Int = 800): HttpProbeResult {
         val urlsToTry = arrayOf(
             "http://$ip/cgi-bin/luci",
-            "http://$ip/"
+            "http://$ip/",
+            "https://$ip/cgi-bin/luci",
+            "https://$ip/"
         )
 
         for (urlString in urlsToTry) {

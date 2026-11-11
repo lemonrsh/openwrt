@@ -1,46 +1,62 @@
 package com.lemonrsh.openwrt
 
 import android.app.Activity
+import android.content.ClipData
+import android.content.ClipboardManager
+import android.content.Context
+import android.content.Intent
 import android.graphics.Color
 import android.graphics.Typeface
 import android.graphics.drawable.GradientDrawable
+import android.net.Uri
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
+import android.text.Editable
+import android.text.InputType
+import android.text.TextWatcher
+import android.text.method.PasswordTransformationMethod
 import android.view.Gravity
 import android.view.View
-import android.view.animation.AccelerateDecelerateInterpolator
 import android.view.animation.OvershootInterpolator
+import android.view.inputmethod.EditorInfo
 import android.widget.Button
+import android.widget.EditText
 import android.widget.LinearLayout
 import android.widget.ScrollView
 import android.widget.TextView
+import android.widget.Toast
 import com.lemonrsh.openwrt.model.RouterDevice
-import com.lemonrsh.openwrt.model.ScanProgress
 import com.lemonrsh.openwrt.model.ScanSource
 import com.lemonrsh.openwrt.model.ScanState
 import com.lemonrsh.openwrt.scanner.LanScanner
+import com.lemonrsh.openwrt.scanner.OpenWrtProbe
 import com.lemonrsh.openwrt.scanner.TailscaleScanner
 import com.lemonrsh.openwrt.ui.ConnectDialog
 import com.lemonrsh.openwrt.ui.RadarScanView
+import com.lemonrsh.openwrt.util.CertificateHelper
 import com.lemonrsh.openwrt.util.HapticHelper
 import com.lemonrsh.openwrt.util.RootHelper
 import java.util.concurrent.CopyOnWriteArrayList
+import java.util.concurrent.Executors
 
 class MainActivity : Activity() {
 
     private val bg = Color.rgb(11, 16, 32)
     private val card = Color.rgb(22, 30, 51)
     private val cardFound = Color.rgb(26, 38, 64)
+    private val cardSelected = Color.rgb(18, 28, 52)
+    private val inputBg = Color.rgb(26, 38, 68)
     private val muted = Color.rgb(151, 163, 190)
     private val white = Color.rgb(241, 245, 255)
     private val blue = Color.rgb(111, 145, 255)
     private val cyan = Color.rgb(0, 229, 255)
     private val green = Color.rgb(82, 214, 163)
-    private val red = Color.rgb(255, 82, 82)
     private val amber = Color.rgb(255, 183, 77)
 
     private val handler = Handler(Looper.getMainLooper())
+    private val executor = Executors.newSingleThreadExecutor()
+
     private lateinit var radarView: RadarScanView
     private lateinit var statusText: TextView
     private lateinit var progressSubtext: TextView
@@ -56,10 +72,20 @@ class MainActivity : Activity() {
     private val discoveredDevices = CopyOnWriteArrayList<RouterDevice>()
     private var scanState = ScanState.IDLE
 
+    // Selected device for inline login (NO disruptive pop-up after scan!)
+    private var selectedDevice: RouterDevice? = null
+    private val routerUsernames = mutableMapOf<String, String>()
+    private val routerPasswords = mutableMapOf<String, String>()
+    private val routerPorts = mutableMapOf<String, Int>()
+    private val passwordVisibilityState = mutableMapOf<String, Boolean>()
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         window.statusBarColor = bg
         window.navigationBarColor = bg
+
+        // Auto-accept all SSL/TLS self-signed router certificates (e.g. LuCI HTTPS)
+        CertificateHelper.installTrustAllCertificates()
 
         lanScanner = LanScanner(this)
         tailscaleScanner = TailscaleScanner(this)
@@ -276,7 +302,7 @@ class MainActivity : Activity() {
                 } else {
                     rootBadge.text = "NO ROOT (LAN ONLY)"
                     rootBadge.setTextColor(muted)
-                    rootBadge.background = rounded(Color.rgb(25, 30, 45), 6, Color.rgb(40, 50, 75), 1)
+                    rootBadge.background = rounded(Color.rgb(25, 32, 48), 6, Color.rgb(40, 52, 75), 1)
                 }
             }
         }.start()
@@ -289,7 +315,7 @@ class MainActivity : Activity() {
         HapticHelper.vibrateTick(this)
         radarView.startScanning()
 
-        statusText.text = "SCANNING LAN SUBNET…"
+        statusText.text = "SCANNING LOCAL WI-FI SUBNET…"
         statusText.setTextColor(cyan)
 
         lanScanner?.scan(
@@ -306,7 +332,7 @@ class MainActivity : Activity() {
             },
             onComplete = { list ->
                 runOnUiThread {
-                    scanFinished("LAN scan complete: ${list.size} OpenWrt found")
+                    scanFinished("LAN scan finished: ${list.size} OpenWrt router(s) found")
                 }
             }
         )
@@ -319,7 +345,7 @@ class MainActivity : Activity() {
         HapticHelper.vibrateTick(this)
         radarView.startScanning()
 
-        statusText.text = "INSPECTING TAILSCALE VIA ROOT…"
+        statusText.text = "PROBING TAILSCALE CGNAT NODES…"
         statusText.setTextColor(cyan)
 
         tailscaleScanner?.scan(
@@ -398,6 +424,11 @@ class MainActivity : Activity() {
         if (discoveredDevices.any { it.ip == device.ip }) return
         discoveredDevices.add(0, device)
 
+        // Select the first device discovered so it's ready for login right away
+        if (selectedDevice == null) {
+            selectedDevice = device
+        }
+
         // 1. Radar animation lock
         radarView.notifyDeviceFound(device.ip)
 
@@ -405,21 +436,19 @@ class MainActivity : Activity() {
         HapticHelper.vibrateFound(this)
 
         // 3. Update status text
-        statusText.text = "● OPENWRT FOUND: ${device.ip}"
+        statusText.text = "● OPENWRT FOUND: ${device.displayName}"
         statusText.setTextColor(green)
+        progressSubtext.text = "Select router below and enter credentials to log in"
 
-        // 4. Render card with animated entrance
+        // 4. Render card with inline login (NO disruptive pop-up!)
         renderDevicesList()
-
-        // 5. Automatically popup connect dialog for the discovered router!
-        showConnectDialog(device)
     }
 
     private fun scanFinished(message: String) {
         scanState = ScanState.IDLE
         setButtonsScanning(false)
         radarView.stopScanning()
-        statusText.text = if (discoveredDevices.isNotEmpty()) "ROUTERS DISCOVERED" else "SCAN FINISHED"
+        statusText.text = if (discoveredDevices.isNotEmpty()) "ROUTERS DISCOVERED (SELECT TO LOG IN)" else "SCAN FINISHED"
         statusText.setTextColor(if (discoveredDevices.isNotEmpty()) green else muted)
         progressSubtext.text = message
     }
@@ -442,47 +471,53 @@ class MainActivity : Activity() {
         }
 
         for (device in discoveredDevices) {
-            val cardView = createDeviceCard(device)
+            val isSelected = (selectedDevice?.ip == device.ip)
+            val cardView = createDeviceCard(device, isSelected)
             devicesContainer.addView(cardView)
 
             // Smooth entrance animation
             cardView.alpha = 0f
-            cardView.scaleY = 0.85f
-            cardView.scaleX = 0.85f
+            cardView.scaleY = 0.92f
+            cardView.scaleX = 0.92f
             cardView.animate()
                 .alpha(1f)
                 .scaleX(1f)
                 .scaleY(1f)
-                .setDuration(400)
-                .setInterpolator(OvershootInterpolator(1.2f))
+                .setDuration(350)
+                .setInterpolator(OvershootInterpolator(1.1f))
                 .start()
         }
     }
 
-    private fun createDeviceCard(device: RouterDevice): View {
+    private fun createDeviceCard(device: RouterDevice, isSelected: Boolean): View {
+        val strokeColor = if (isSelected) cyan else Color.rgb(38, 54, 88)
+        val strokeWidth = if (isSelected) 2 else 1
+        val cardBg = if (isSelected) cardSelected else cardFound
+
         val card = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            background = rounded(cardFound, 14, green, 1)
+            background = rounded(cardBg, 14, strokeColor, strokeWidth)
             val p = dp(16)
             setPadding(p, p, p, p)
-            isClickable = true
-            isFocusable = true
             layoutParams = LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT,
                 LinearLayout.LayoutParams.WRAP_CONTENT
             ).apply {
-                bottomMargin = dp(12)
-            }
-            setOnClickListener {
-                HapticHelper.vibrateTick(this@MainActivity)
-                showConnectDialog(device)
+                bottomMargin = dp(14)
             }
         }
 
-        // Header: Hostname/IP + Source Badge
+        // Header: Hostname/IP + Source Badge + Selection Indicator
         val topRow = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
+            isClickable = true
+            isFocusable = true
+            setOnClickListener {
+                HapticHelper.vibrateTick(this@MainActivity)
+                selectedDevice = if (isSelected) null else device
+                renderDevicesList()
+            }
         }
 
         val nameCol = LinearLayout(this).apply {
@@ -491,15 +526,15 @@ class MainActivity : Activity() {
         }
 
         val nameView = TextView(this).apply {
-            text = device.displayName
-            setTextColor(white)
+            text = (if (isSelected) "▶ " else "") + device.displayName
+            setTextColor(if (isSelected) cyan else white)
             textSize = 16f
             typeface = Typeface.create("sans-serif-medium", Typeface.BOLD)
         }
 
         val ipView = TextView(this).apply {
-            text = "SSH Port ${device.port}  ·  ${device.latencyMs} ms"
-            setTextColor(cyan)
+            text = "${device.ip} : ${device.port}  ·  ${device.latencyMs} ms"
+            setTextColor(if (isSelected) green else muted)
             textSize = 12f
         }
 
@@ -522,7 +557,7 @@ class MainActivity : Activity() {
         topRow.addView(sourceBadge)
         card.addView(topRow)
 
-        card.addView(space(10))
+        card.addView(space(8))
 
         // Service badge pill
         val serverPill = TextView(this).apply {
@@ -530,22 +565,384 @@ class MainActivity : Activity() {
             setTextColor(green)
             textSize = 12f
             typeface = Typeface.create("sans-serif", Typeface.NORMAL)
+            isClickable = true
+            setOnClickListener {
+                HapticHelper.vibrateTick(this@MainActivity)
+                selectedDevice = if (isSelected) null else device
+                renderDevicesList()
+            }
         }
         card.addView(serverPill)
 
-        card.addView(space(10))
+        if (!isSelected) {
+            card.addView(space(10))
+            val selectPrompt = TextView(this).apply {
+                text = "TAP TO SELECT & LOG IN →"
+                setTextColor(blue)
+                textSize = 11f
+                typeface = Typeface.create("sans-serif-medium", Typeface.BOLD)
+                letterSpacing = 0.05f
+            }
+            card.addView(selectPrompt)
+            card.setOnClickListener {
+                HapticHelper.vibrateTick(this@MainActivity)
+                selectedDevice = device
+                renderDevicesList()
+            }
+            return card
+        }
 
-        // Connect action button on card
-        val connectPrompt = TextView(this).apply {
-            text = "TAP TO ENTER PASSWORD & CONNECT →"
-            setTextColor(blue)
+        // ==========================================
+        // INLINE LOGIN PANEL (NO POP-UP NEEDED!)
+        // ==========================================
+        card.addView(space(12))
+        card.addView(divider())
+        card.addView(space(12))
+
+        // Auto-accept Certificate & SSH Key Notice
+        val certNotice = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            background = rounded(Color.rgb(18, 36, 44), 8, Color.rgb(20, 80, 80), 1)
+            val p = dp(8)
+            setPadding(p, p, p, p)
+        }
+
+        val certIcon = TextView(this).apply {
+            text = "🛡 "
+            textSize = 12f
+        }
+
+        val certText = TextView(this).apply {
+            text = "Auto-Accept SSH Host Certificate & SSL Keys (StrictHostKeyChecking=no)"
+            setTextColor(green)
             textSize = 11f
             typeface = Typeface.create("sans-serif-medium", Typeface.BOLD)
-            letterSpacing = 0.05f
         }
-        card.addView(connectPrompt)
+
+        certNotice.addView(certIcon)
+        certNotice.addView(certText)
+        card.addView(certNotice)
+
+        card.addView(space(12))
+
+        // Username Field
+        card.addView(label("SSH USERNAME"))
+        card.addView(space(4))
+
+        val currentUsername = routerUsernames[device.ip] ?: "root"
+        val usernameInput = EditText(this).apply {
+            setText(currentUsername)
+            setTextColor(white)
+            setHintTextColor(muted)
+            textSize = 14f
+            background = rounded(inputBg, 8, Color.rgb(40, 56, 96), 1)
+            val p = dp(11)
+            setPadding(p, p, p, p)
+            isFocusable = true
+            isFocusableInTouchMode = true
+            isClickable = true
+            isCursorVisible = true
+            inputType = InputType.TYPE_CLASS_TEXT
+            imeOptions = EditorInfo.IME_ACTION_NEXT
+            setSingleLine(true)
+            addTextChangedListener(object : TextWatcher {
+                override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
+                override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {
+                    routerUsernames[device.ip] = s?.toString()?.trim() ?: "root"
+                }
+                override fun afterTextChanged(s: Editable?) {}
+            })
+        }
+        card.addView(usernameInput)
+
+        card.addView(space(10))
+
+        // Password Header with SHOW/HIDE Toggle
+        val passHeader = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+        }
+
+        val passLabel = label("SSH PASSWORD").apply {
+            layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
+        }
+
+        var isPassVisible = passwordVisibilityState[device.ip] ?: false
+
+        val toggleBtn = TextView(this).apply {
+            text = if (isPassVisible) "🔒 HIDE" else "👁 SHOW"
+            textSize = 11f
+            setTextColor(cyan)
+            typeface = Typeface.create("sans-serif-medium", Typeface.BOLD)
+            val px = dp(6)
+            val py = dp(2)
+            setPadding(px, py, px, py)
+        }
+
+        passHeader.addView(passLabel)
+        passHeader.addView(toggleBtn)
+        card.addView(passHeader)
+
+        card.addView(space(4))
+
+        val currentPassword = routerPasswords[device.ip] ?: ""
+        val passwordInput = EditText(this).apply {
+            hint = "Enter OpenWrt password (or leave empty)"
+            setText(currentPassword)
+            setTextColor(white)
+            setHintTextColor(Color.rgb(100, 115, 145))
+            textSize = 14f
+            background = rounded(inputBg, 8, Color.rgb(40, 56, 96), 1)
+            val p = dp(11)
+            setPadding(p, p, p, p)
+            isFocusable = true
+            isFocusableInTouchMode = true
+            isClickable = true
+            isCursorVisible = true
+            inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD
+            if (!isPassVisible) {
+                transformationMethod = PasswordTransformationMethod.getInstance()
+            } else {
+                transformationMethod = null
+            }
+            imeOptions = EditorInfo.IME_ACTION_DONE
+            setSingleLine(true)
+            addTextChangedListener(object : TextWatcher {
+                override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
+                override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {
+                    routerPasswords[device.ip] = s?.toString() ?: ""
+                }
+                override fun afterTextChanged(s: Editable?) {}
+            })
+            setOnEditorActionListener { _, actionId, _ ->
+                if (actionId == EditorInfo.IME_ACTION_DONE) {
+                    val user = usernameInput.text.toString().trim().ifBlank { "root" }
+                    val pass = text.toString()
+                    val port = routerPorts[device.ip] ?: device.port
+                    loginAndConnect(device, user, pass, port)
+                    true
+                } else false
+            }
+        }
+
+        toggleBtn.setOnClickListener {
+            isPassVisible = !isPassVisible
+            passwordVisibilityState[device.ip] = isPassVisible
+            if (isPassVisible) {
+                passwordInput.transformationMethod = null
+                toggleBtn.text = "🔒 HIDE"
+            } else {
+                passwordInput.transformationMethod = PasswordTransformationMethod.getInstance()
+                toggleBtn.text = "👁 SHOW"
+            }
+            passwordInput.setSelection(passwordInput.text.length)
+        }
+
+        card.addView(passwordInput)
+
+        card.addView(space(10))
+
+        // Port Field
+        card.addView(label("SSH PORT"))
+        card.addView(space(4))
+
+        val currentPort = routerPorts[device.ip] ?: device.port
+        val portInput = EditText(this).apply {
+            setText(currentPort.toString())
+            setTextColor(white)
+            setHintTextColor(muted)
+            textSize = 14f
+            background = rounded(inputBg, 8, Color.rgb(40, 56, 96), 1)
+            val p = dp(11)
+            setPadding(p, p, p, p)
+            isFocusable = true
+            isFocusableInTouchMode = true
+            isClickable = true
+            isCursorVisible = true
+            inputType = InputType.TYPE_CLASS_NUMBER
+            setSingleLine(true)
+            addTextChangedListener(object : TextWatcher {
+                override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
+                override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {
+                    routerPorts[device.ip] = s?.toString()?.toIntOrNull() ?: device.port
+                }
+                override fun afterTextChanged(s: Editable?) {}
+            })
+        }
+        card.addView(portInput)
+
+        card.addView(space(12))
+
+        // Status Feedback View
+        val cardStatusLabel = TextView(this).apply {
+            text = "Press button below to log in and open router dashboard"
+            setTextColor(muted)
+            textSize = 12f
+            gravity = Gravity.CENTER_HORIZONTAL
+        }
+        card.addView(cardStatusLabel)
+
+        card.addView(space(14))
+
+        // PRIMARY ACTION: LOGIN & CONNECT
+        val loginBtn = Button(this).apply {
+            text = "LOGIN & CONNECT TO ROUTER →"
+            setTextColor(Color.rgb(10, 15, 26))
+            textSize = 14f
+            typeface = Typeface.create("sans-serif-medium", Typeface.BOLD)
+            background = rounded(green, 10)
+            val p = dp(13)
+            setPadding(p, p, p, p)
+            setOnClickListener {
+                val user = usernameInput.text.toString().trim().ifBlank { "root" }
+                val pass = passwordInput.text.toString()
+                val port = portInput.text.toString().toIntOrNull() ?: device.port
+                loginAndConnect(device, user, pass, port)
+            }
+        }
+        card.addView(loginBtn)
+
+        card.addView(space(8))
+
+        // SECONDARY ACTIONS: Test SSH & Open LuCI
+        val actionRow = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+        }
+
+        val testBtn = Button(this).apply {
+            text = "Verify SSH Port"
+            setTextColor(cyan)
+            textSize = 12f
+            background = rounded(card, 8, cyan, 1)
+            val p = dp(10)
+            setPadding(p, p, p, p)
+            layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
+            setOnClickListener {
+                val port = portInput.text.toString().toIntOrNull() ?: device.port
+                cardStatusLabel.text = "Testing SSH on ${device.ip}:$port…"
+                cardStatusLabel.setTextColor(cyan)
+                isEnabled = false
+                executor.execute {
+                    val res = OpenWrtProbe.probeSsh(device.ip, port, timeoutMs = 1200)
+                    runOnUiThread {
+                        isEnabled = true
+                        if (res.isOpen) {
+                            cardStatusLabel.text = "✓ SSH Port $port OPEN: ${res.banner ?: "Dropbear Ready"}"
+                            cardStatusLabel.setTextColor(green)
+                        } else {
+                            cardStatusLabel.text = "✗ Port $port unreachable or closed"
+                            cardStatusLabel.setTextColor(Color.rgb(255, 82, 82))
+                        }
+                    }
+                }
+            }
+        }
+
+        val luciBtn = Button(this).apply {
+            text = "Open LuCI Web"
+            setTextColor(blue)
+            textSize = 12f
+            background = rounded(card, 8, blue, 1)
+            val p = dp(10)
+            setPadding(p, p, p, p)
+            val lp = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
+            lp.marginStart = dp(8)
+            layoutParams = lp
+            setOnClickListener {
+                openLuCiInBrowser(device.ip)
+            }
+        }
+
+        actionRow.addView(testBtn)
+        actionRow.addView(luciBtn)
+        card.addView(actionRow)
+
+        card.addView(space(8))
+
+        // TERTIARY ROW: Launch External Terminal & Copy SSH Command
+        val bottomRow = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+        }
+
+        val terminalBtn = Button(this).apply {
+            text = "Terminal (ssh://)"
+            setTextColor(cyan)
+            textSize = 12f
+            background = rounded(inputBg, 8)
+            layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
+            setOnClickListener {
+                val user = usernameInput.text.toString().trim().ifBlank { "root" }
+                val port = portInput.text.toString().toIntOrNull() ?: device.port
+                launchSshTerminal(device.ip, user, port)
+            }
+        }
+
+        val copyBtn = Button(this).apply {
+            text = "Copy SSH Command"
+            setTextColor(muted)
+            textSize = 12f
+            background = rounded(inputBg, 8)
+            val lp = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
+            lp.marginStart = dp(8)
+            layoutParams = lp
+            setOnClickListener {
+                val user = usernameInput.text.toString().trim().ifBlank { "root" }
+                val port = portInput.text.toString().toIntOrNull() ?: device.port
+                val cmd = CertificateHelper.buildSshCommand(user, device.ip, port, autoAcceptCert = true)
+                val cb = getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                cb.setPrimaryClip(ClipData.newPlainText("OpenWrt SSH", cmd))
+                Toast.makeText(this@MainActivity, "Copied: $cmd", Toast.LENGTH_SHORT).show()
+            }
+        }
+
+        bottomRow.addView(terminalBtn)
+        bottomRow.addView(copyBtn)
+        card.addView(bottomRow)
 
         return card
+    }
+
+    private fun loginAndConnect(device: RouterDevice, user: String, pass: String, port: Int) {
+        HapticHelper.vibrateTick(this)
+        val intent = Intent(this, RouterDashboardActivity::class.java).apply {
+            putExtra("EXTRA_IP", device.ip)
+            putExtra("EXTRA_HOSTNAME", device.displayName)
+            putExtra("EXTRA_USER", user)
+            putExtra("EXTRA_PASS", pass)
+            putExtra("EXTRA_PORT", port)
+            putExtra("EXTRA_SOURCE", device.source.name)
+            putExtra("EXTRA_AUTO_ACCEPT_CERT", true)
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK
+        }
+        startActivity(intent)
+    }
+
+    private fun launchSshTerminal(ip: String, user: String, port: Int) {
+        val uri = Uri.parse("ssh://$user@$ip:$port")
+        val intent = Intent(Intent.ACTION_VIEW, uri).apply {
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK
+        }
+        try {
+            startActivity(intent)
+            Toast.makeText(this, "Launching SSH terminal…", Toast.LENGTH_SHORT).show()
+        } catch (_: Exception) {
+            val cmd = CertificateHelper.buildSshCommand(user, ip, port, autoAcceptCert = true)
+            val cb = getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+            cb.setPrimaryClip(ClipData.newPlainText("OpenWrt SSH Command", cmd))
+            Toast.makeText(this, "SSH command copied (auto-accepts host key): $cmd", Toast.LENGTH_LONG).show()
+        }
+    }
+
+    private fun openLuCiInBrowser(ip: String) {
+        try {
+            val intent = Intent(Intent.ACTION_VIEW, Uri.parse("http://$ip/")).apply {
+                flags = Intent.FLAG_ACTIVITY_NEW_TASK
+            }
+            startActivity(intent)
+        } catch (e: Exception) {
+            Toast.makeText(this, "Cannot open browser: ${e.message}", Toast.LENGTH_SHORT).show()
+        }
     }
 
     private fun updateEmptyCard() {
@@ -583,26 +980,28 @@ class MainActivity : Activity() {
         devicesContainer.addView(emptyCard)
     }
 
-    private var activeDialog: ConnectDialog? = null
-
-    private fun showConnectDialog(device: RouterDevice) {
-        if (isFinishing || isDestroyed) return
-        if (activeDialog?.isShowing == true) return
-
-        val dialog = ConnectDialog(this, device)
-        activeDialog = dialog
-        dialog.setOnDismissListener { activeDialog = null }
-        dialog.show()
-    }
-
     override fun onDestroy() {
         lanScanner?.cancel()
         tailscaleScanner?.cancel()
+        executor.shutdownNow()
         super.onDestroy()
+    }
+
+    private fun label(s: String) = TextView(this).apply {
+        text = s
+        setTextColor(muted)
+        textSize = 10f
+        typeface = Typeface.create("sans-serif-medium", Typeface.BOLD)
+        letterSpacing = 0.05f
     }
 
     private fun space(h: Int) = View(this).apply {
         layoutParams = LinearLayout.LayoutParams(1, dp(h))
+    }
+
+    private fun divider() = View(this).apply {
+        layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dp(1))
+        setBackgroundColor(Color.rgb(38, 54, 88))
     }
 
     private fun rounded(color: Int, radiusDp: Int, strokeColor: Int = Color.TRANSPARENT, strokeWidthDp: Int = 0) =

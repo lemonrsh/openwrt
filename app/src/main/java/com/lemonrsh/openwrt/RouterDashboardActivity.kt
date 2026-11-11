@@ -85,6 +85,8 @@ class RouterDashboardActivity : Activity() {
         window.statusBarColor = bg
         window.navigationBarColor = bg
 
+        com.lemonrsh.openwrt.util.CertificateHelper.installTrustAllCertificates()
+
         routerIp = intent.getStringExtra("EXTRA_IP") ?: "192.168.1.1"
         routerHostname = intent.getStringExtra("EXTRA_HOSTNAME") ?: "OpenWrt Router"
         sshUser = intent.getStringExtra("EXTRA_USER") ?: "root"
@@ -587,10 +589,10 @@ class RouterDashboardActivity : Activity() {
         try {
             startActivity(intent)
         } catch (_: Exception) {
-            val cmd = "ssh $sshUser@$routerIp -p $sshPort"
+            val cmd = com.lemonrsh.openwrt.util.CertificateHelper.buildSshCommand(sshUser, routerIp, sshPort, autoAcceptCert = true)
             val cb = getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
             cb.setPrimaryClip(ClipData.newPlainText("OpenWrt SSH", cmd))
-            Toast.makeText(this, "Copied SSH command: $cmd", Toast.LENGTH_SHORT).show()
+            Toast.makeText(this, "Copied SSH command (auto-accepts host key): $cmd", Toast.LENGTH_SHORT).show()
         }
     }
 
