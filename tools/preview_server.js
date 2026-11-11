@@ -138,7 +138,6 @@ function checkTailscale() {
 }
 
 const server = http.createServer(async (req, res) => {
-    // Enable CORS and preview iframe support
     res.setHeader('Access-Control-Allow-Origin', '*');
     res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
     res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
@@ -166,7 +165,6 @@ const server = http.createServer(async (req, res) => {
         return res.end(JSON.stringify(result));
     }
 
-    // Serve HTML Preview
     if (url.pathname === '/' || url.pathname === '/index.html') {
         res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
         return res.end(HTML_PAGE);
@@ -181,13 +179,15 @@ const HTML_PAGE = `<!DOCTYPE html>
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>OpenWrt Scanner - Live Preview</title>
+<title>OpenWrt Scanner &amp; Dashboard</title>
 <style>
   :root {
     --bg-dark: #0B1020;
     --card-dark: #161E33;
+    --card-inner: #1C2642;
     --card-found: #1A2640;
     --border-color: #222D4A;
+    --border-active: #3D507F;
     --accent-blue: #6F91FF;
     --accent-cyan: #00E5FF;
     --accent-green: #52D6A3;
@@ -239,6 +239,10 @@ const HTML_PAGE = `<!DOCTYPE html>
     border-radius: 4px;
     font-weight: 600;
   }
+
+  /* Screens */
+  .screen { display: flex; flex-direction: column; flex: 1; }
+  .screen.hidden { display: none; }
 
   /* App Header */
   .app-header {
@@ -539,6 +543,186 @@ const HTML_PAGE = `<!DOCTYPE html>
     cursor: pointer;
   }
 
+  /* ========================================= */
+  /* ROUTER DASHBOARD SCREEN STYLES            */
+  /* ========================================= */
+  .dashboard-container {
+    padding: 16px 20px 24px 20px;
+    overflow-y: auto;
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+  }
+
+  .dash-nav {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+  .btn-back {
+    background: #12192B;
+    border: 1px solid #2B3D66;
+    color: var(--text-muted);
+    padding: 6px 12px;
+    border-radius: 8px;
+    font-size: 11px;
+    font-weight: 700;
+    cursor: pointer;
+  }
+  .live-pill {
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--accent-green);
+    display: flex;
+    align-items: center;
+    gap: 4px;
+  }
+
+  /* TOP SECTION: Router Name, Uptime & Temp */
+  .dash-top-card {
+    background: var(--card-dark);
+    border: 1px solid var(--border-color);
+    border-radius: 16px;
+    padding: 18px;
+    box-shadow: 0 4px 24px rgba(0, 0, 0, 0.4);
+  }
+  .dash-header-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+  }
+  .dash-router-name {
+    font-size: 20px;
+    font-weight: 900;
+    letter-spacing: 0.4px;
+  }
+  .dash-router-model {
+    font-size: 12px;
+    color: var(--accent-cyan);
+    margin-top: 2px;
+    font-weight: 500;
+  }
+  .dash-ip-badge {
+    background: #121B30;
+    border: 1px solid #27375D;
+    color: var(--accent-green);
+    font-size: 11px;
+    font-weight: 700;
+    padding: 4px 8px;
+    border-radius: 6px;
+  }
+
+  .metrics-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+    margin-top: 14px;
+    padding-top: 14px;
+    border-top: 1px solid #1E2B4B;
+  }
+  .metric-box {
+    background: var(--card-inner);
+    border: 1px solid var(--border-color);
+    border-radius: 12px;
+    padding: 12px 14px;
+  }
+  .metric-label {
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.6px;
+    color: var(--text-muted);
+  }
+  .metric-val {
+    font-size: 18px;
+    font-weight: 800;
+    margin-top: 4px;
+    color: var(--text-white);
+  }
+  .metric-val.temp { color: var(--accent-green); }
+  .metric-sub {
+    font-size: 11px;
+    margin-top: 2px;
+    color: var(--text-muted);
+  }
+
+  /* MIDDLE SECTION: RAM & Storage Usage */
+  .dash-section-title {
+    font-size: 11px;
+    font-weight: 800;
+    letter-spacing: 0.8px;
+    color: var(--text-muted);
+  }
+
+  .usage-card {
+    background: var(--card-dark);
+    border: 1px solid var(--border-color);
+    border-radius: 14px;
+    padding: 16px;
+  }
+  .usage-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 10px;
+  }
+  .usage-title {
+    font-size: 13px;
+    font-weight: 700;
+  }
+  .usage-badge {
+    font-size: 11px;
+    font-weight: 700;
+    padding: 3px 8px;
+    border-radius: 6px;
+    background: rgba(0, 229, 255, 0.12);
+    color: var(--accent-cyan);
+    border: 1px solid var(--accent-cyan);
+  }
+  .usage-badge.storage {
+    background: rgba(82, 214, 163, 0.12);
+    color: var(--accent-green);
+    border-color: var(--accent-green);
+  }
+
+  .progress-track {
+    width: 100%;
+    height: 10px;
+    background: #10172A;
+    border-radius: 5px;
+    overflow: hidden;
+    position: relative;
+    border: 1px solid #1E2A48;
+  }
+  .progress-fill {
+    height: 100%;
+    border-radius: 5px;
+    transition: width 0.4s ease;
+  }
+  .progress-fill.ram {
+    background: linear-gradient(90deg, #6F91FF, #00E5FF);
+  }
+  .progress-fill.storage {
+    background: linear-gradient(90deg, #2E7559, #52D6A3);
+  }
+
+  .usage-stats-row {
+    display: flex;
+    justify-content: space-between;
+    font-size: 12px;
+    margin-top: 8px;
+  }
+  .usage-stats-row .primary-stat { color: var(--text-muted); }
+  .usage-stats-row .secondary-stat { color: var(--accent-green); font-weight: 600; }
+
+  /* Dashboard Action Buttons */
+  .dash-actions {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin-top: 6px;
+  }
+
   .toast {
     position: absolute;
     bottom: 24px;
@@ -567,44 +751,131 @@ const HTML_PAGE = `<!DOCTYPE html>
     <span>TAILSCALE: ACTIVE</span>
   </div>
 
-  <!-- Header -->
-  <div class="app-header">
-    <div class="app-title">
-      <h1>OPENWRT SCANNER</h1>
-      <p>LAN &amp; TAILSCALE SSH DISCOVERY</p>
+  <!-- SCREEN 1: SCANNER SCREEN -->
+  <div class="screen" id="scannerScreen">
+    <!-- Header -->
+    <div class="app-header">
+      <div class="app-title">
+        <h1>OPENWRT SCANNER</h1>
+        <p>LAN &amp; TAILSCALE SSH DISCOVERY</p>
+      </div>
+    </div>
+
+    <!-- Radar View -->
+    <div class="radar-container">
+      <canvas id="radarCanvas" width="230" height="230"></canvas>
+      <div class="radar-status">
+        <div class="status-main" id="statusMain">READY TO SCAN</div>
+        <div class="status-sub" id="statusSub">Search OpenWrt routers on LAN &amp; Tailscale</div>
+      </div>
+    </div>
+
+    <!-- Action Buttons -->
+    <div class="button-group">
+      <button class="btn btn-lan" onclick="startScan('LAN')">SCAN LAN</button>
+      <button class="btn btn-tailscale" onclick="startScan('TAILSCALE')">TAILSCALE (ROOT)</button>
+      <button class="btn btn-all" onclick="startScan('ALL')">SCAN BOTH</button>
+    </div>
+
+    <!-- Quick Demo / Simulation Buttons -->
+    <div class="demo-bar">
+      <span class="demo-chip" onclick="simulateFound('192.168.1.1', 'LAN', 'OpenWrt-Gateway')">⚡ Demo LAN Router</span>
+      <span class="demo-chip" onclick="simulateFound('100.84.12.5', 'TAILSCALE', 'openwrt-node')">⚡ Demo Tailscale Router</span>
+    </div>
+
+    <!-- Discovered Routers List -->
+    <div class="devices-section">
+      <div class="section-label">DISCOVERED ROUTERS</div>
+      <div id="devicesList">
+        <div class="empty-card">
+          <div class="empty-icon">☵</div>
+          <div>No OpenWrt routers discovered yet</div>
+          <div style="font-size: 11px; margin-top: 4px; color: #5C6E96;">Tap Scan or a Demo trigger above</div>
+        </div>
+      </div>
     </div>
   </div>
 
-  <!-- Radar View -->
-  <div class="radar-container">
-    <canvas id="radarCanvas" width="230" height="230"></canvas>
-    <div class="radar-status">
-      <div class="status-main" id="statusMain">READY TO SCAN</div>
-      <div class="status-sub" id="statusSub">Search OpenWrt routers on LAN &amp; Tailscale</div>
-    </div>
-  </div>
+  <!-- SCREEN 2: ROUTER DETAILS & DASHBOARD SCREEN -->
+  <div class="screen hidden" id="dashboardScreen">
+    <div class="dashboard-container">
+      <!-- Nav Header -->
+      <div class="dash-nav">
+        <button class="btn-back" onclick="backToScanner()">← DISCONNECT</button>
+        <span class="live-pill">● CONNECTED VIA SSH</span>
+      </div>
 
-  <!-- Action Buttons -->
-  <div class="button-group">
-    <button class="btn btn-lan" onclick="startScan('LAN')">SCAN LAN</button>
-    <button class="btn btn-tailscale" onclick="startScan('TAILSCALE')">TAILSCALE (ROOT)</button>
-    <button class="btn btn-all" onclick="startScan('ALL')">SCAN BOTH</button>
-  </div>
+      <!-- ============================================== -->
+      <!-- TOP SECTION: Router Name, Uptime & Temperature -->
+      <!-- ============================================== -->
+      <div class="dash-top-card">
+        <div class="dash-header-row">
+          <div>
+            <div class="dash-router-name" id="dashRouterName">OpenWrt-Gateway</div>
+            <div class="dash-router-model" id="dashRouterModel">MediaTek MT7981 · OpenWrt 23.05.3</div>
+          </div>
+          <span class="dash-ip-badge" id="dashIpBadge">192.168.1.1 : 22</span>
+        </div>
 
-  <!-- Quick Demo / Simulation Buttons -->
-  <div class="demo-bar">
-    <span class="demo-chip" onclick="simulateFound('192.168.1.1', 'LAN', 'OpenWrt-Gateway')">⚡ Demo LAN Router</span>
-    <span class="demo-chip" onclick="simulateFound('100.84.12.5', 'TAILSCALE', 'openwrt-node')">⚡ Demo Tailscale Router</span>
-  </div>
+        <div class="metrics-grid">
+          <!-- Uptime Box -->
+          <div class="metric-box">
+            <div class="metric-label">UPTIME</div>
+            <div class="metric-val" id="dashUptime">14d 6h 23m</div>
+            <div class="metric-sub" style="color: var(--accent-green);">● System Stable</div>
+          </div>
 
-  <!-- Discovered Routers List -->
-  <div class="devices-section">
-    <div class="section-label">DISCOVERED ROUTERS</div>
-    <div id="devicesList">
-      <div class="empty-card">
-        <div class="empty-icon">☵</div>
-        <div>No OpenWrt routers discovered yet</div>
-        <div style="font-size: 11px; margin-top: 4px; color: #5C6E96;">Tap Scan or a Demo trigger above</div>
+          <!-- Temperature Box -->
+          <div class="metric-box">
+            <div class="metric-label">CPU TEMP</div>
+            <div class="metric-val temp" id="dashTemp">48.2°C</div>
+            <div class="metric-sub">● Optimal Zone</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ============================================== -->
+      <!-- MIDDLE SECTION: RAM & Storage Usage            -->
+      <!-- ============================================== -->
+      <div class="dash-section-title">RESOURCE UTILIZATION</div>
+
+      <!-- RAM Usage Card -->
+      <div class="usage-card">
+        <div class="usage-header">
+          <span class="usage-title">RAM (SYSTEM MEMORY)</span>
+          <span class="usage-badge" id="dashRamBadge">38% USED</span>
+        </div>
+        <div class="progress-track">
+          <div class="progress-fill ram" id="dashRamProgress" style="width: 38%;"></div>
+        </div>
+        <div class="usage-stats-row">
+          <span class="primary-stat" id="dashRamUsed">Used: 195 MB / 512 MB</span>
+          <span class="secondary-stat" id="dashRamFree">Free: 317 MB</span>
+        </div>
+      </div>
+
+      <!-- Storage Usage Card -->
+      <div class="usage-card">
+        <div class="usage-header">
+          <span class="usage-title">FLASH STORAGE (OVERLAY)</span>
+          <span class="usage-badge storage" id="dashStorageBadge">36% USED</span>
+        </div>
+        <div class="progress-track">
+          <div class="progress-fill storage" id="dashStorageProgress" style="width: 36%;"></div>
+        </div>
+        <div class="usage-stats-row">
+          <span class="primary-stat" id="dashStorageUsed">Used: 46.2 MB / 128 MB</span>
+          <span class="secondary-stat" id="dashStorageFree">Available: 81.8 MB</span>
+        </div>
+      </div>
+
+      <!-- Bottom Quick Actions -->
+      <div class="dash-actions">
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
+          <button class="btn btn-lan" onclick="refreshDashboardStats()">REFRESH STATS</button>
+          <button class="btn btn-all" onclick="openLuCi()">OPEN LUCI WEB</button>
+        </div>
+        <button class="btn btn-tailscale" onclick="launchTerminalApp()">LAUNCH SSH TERMINAL CLIENT →</button>
       </div>
     </div>
   </div>
@@ -640,11 +911,12 @@ const HTML_PAGE = `<!DOCTYPE html>
       </div>
 
       <div class="modal-actions">
-        <button class="btn btn-connect" onclick="connectSsh()">CONNECT VIA SSH (TERMINAL)</button>
+        <button class="btn btn-connect" onclick="connectToRouterDashboard()">CONNECT TO ROUTER →</button>
         <div class="modal-sec-row">
           <button class="btn btn-sec" onclick="verifySsh()">VERIFY SSH PORT</button>
           <button class="btn btn-sec btn-luci" onclick="openLuCi()">OPEN LUCI WEB</button>
         </div>
+        <button class="btn-close" onclick="launchTerminalApp()">Launch External Terminal (ssh://)</button>
         <button class="btn-close" onclick="copySshCmd()">Copy "ssh root@..." Command</button>
         <button class="btn-close" onclick="closeModal()">Close</button>
       </div>
@@ -673,7 +945,6 @@ const HTML_PAGE = `<!DOCTYPE html>
   function drawRadar() {
     ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-    // 1. Concentric circles
     for (let i = 1; i <= 4; i++) {
       const r = maxRadius * (i / 4);
       ctx.beginPath();
@@ -683,7 +954,6 @@ const HTML_PAGE = `<!DOCTYPE html>
       ctx.stroke();
     }
 
-    // 2. Crosshairs
     ctx.beginPath();
     ctx.setLineDash([4, 4]);
     ctx.strokeStyle = '#253A66';
@@ -693,7 +963,6 @@ const HTML_PAGE = `<!DOCTYPE html>
     ctx.stroke();
     ctx.setLineDash([]);
 
-    // 3. Sonar wave pulse
     if (isScanning) {
       pulseRadius += 0.012;
       if (pulseRadius > 1) pulseRadius = 0;
@@ -704,7 +973,6 @@ const HTML_PAGE = `<!DOCTYPE html>
       ctx.stroke();
     }
 
-    // 4. Rotating sweep
     if (isScanning) {
       sweepAngle += 0.035;
       if (sweepAngle > Math.PI * 2) sweepAngle = 0;
@@ -725,7 +993,6 @@ const HTML_PAGE = `<!DOCTYPE html>
       ctx.fillStyle = grad;
       ctx.fill();
 
-      // Leading beam
       ctx.beginPath();
       ctx.moveTo(0, 0);
       ctx.lineTo(maxRadius, 0);
@@ -736,7 +1003,6 @@ const HTML_PAGE = `<!DOCTYPE html>
       ctx.restore();
     }
 
-    // 5. Blips
     for (let i = blips.length - 1; i >= 0; i--) {
       const b = blips[i];
       b.alpha -= 0.01;
@@ -752,7 +1018,6 @@ const HTML_PAGE = `<!DOCTYPE html>
       ctx.fill();
     }
 
-    // 6. Locked target reticle
     if (lockedTarget) {
       targetPulse += 0.03;
       if (targetPulse > 1) targetPulse = 0;
@@ -760,21 +1025,18 @@ const HTML_PAGE = `<!DOCTYPE html>
       const tx = cx + Math.cos(lockedTarget.angle) * (maxRadius * lockedTarget.dist);
       const ty = cy + Math.sin(lockedTarget.angle) * (maxRadius * lockedTarget.dist);
 
-      // Target ripple
       ctx.beginPath();
       ctx.arc(tx, ty, 10 + 16 * targetPulse, 0, Math.PI * 2);
       ctx.strokeStyle = 'rgba(82, 214, 163, ' + (1 - targetPulse) * 0.9 + ')';
       ctx.lineWidth = 2;
       ctx.stroke();
 
-      // Reticle
       ctx.beginPath();
       ctx.arc(tx, ty, 7, 0, Math.PI * 2);
       ctx.strokeStyle = '#00E5FF';
       ctx.lineWidth = 2;
       ctx.stroke();
 
-      // Cross ticks
       ctx.beginPath();
       ctx.moveTo(tx - 12, ty); ctx.lineTo(tx - 8, ty);
       ctx.moveTo(tx + 8, ty); ctx.lineTo(tx + 12, ty);
@@ -784,14 +1046,12 @@ const HTML_PAGE = `<!DOCTYPE html>
       ctx.lineWidth = 1.5;
       ctx.stroke();
 
-      // Glowing center
       ctx.beginPath();
       ctx.arc(tx, ty, 3.5, 0, Math.PI * 2);
       ctx.fillStyle = '#52D6A3';
       ctx.fill();
     }
 
-    // Center hub
     ctx.beginPath();
     ctx.arc(cx, cy, 4, 0, Math.PI * 2);
     ctx.fillStyle = isScanning ? '#00E5FF' : '#3D507F';
@@ -801,13 +1061,9 @@ const HTML_PAGE = `<!DOCTYPE html>
   }
   requestAnimationFrame(drawRadar);
 
-  // Vibration helper
   function triggerVibrate() {
     if ('vibrate' in navigator) {
-      try {
-        // Triumphant pattern: buzz - pause - long buzz
-        navigator.vibrate([120, 80, 220]);
-      } catch (e) {}
+      try { navigator.vibrate([120, 80, 220]); } catch (e) {}
     }
   }
 
@@ -820,6 +1076,8 @@ const HTML_PAGE = `<!DOCTYPE html>
 
   const discovered = [];
   let currentSelected = null;
+  let liveTimer = null;
+  let uptimeSec = 124890;
 
   function startScan(type) {
     isScanning = true;
@@ -827,7 +1085,6 @@ const HTML_PAGE = `<!DOCTYPE html>
     document.getElementById('statusMain').style.color = '#00E5FF';
     document.getElementById('statusSub').innerText = 'Probing subnet & Dropbear SSH port 22…';
 
-    // Add random blips
     const blipTimer = setInterval(() => {
       blips.push({
         angle: Math.random() * Math.PI * 2,
@@ -836,7 +1093,6 @@ const HTML_PAGE = `<!DOCTYPE html>
       });
     }, 280);
 
-    // Fetch live gateway/ARP or simulate after 2s
     fetch('/api/info')
       .then(r => r.json())
       .then(info => {
@@ -876,25 +1132,20 @@ const HTML_PAGE = `<!DOCTYPE html>
       discovered.unshift(device);
     }
 
-    // 1. Target radar lock
     lockedTarget = {
       angle: (Math.abs(ip.split('.').reduce((a, b) => a + parseInt(b), 0)) % 360) * (Math.PI / 180),
       dist: 0.62
     };
 
-    // 2. Hardware vibration!
     triggerVibrate();
     showToast('📳 Vibrated: OpenWrt Router Found!');
 
-    // 3. Update status
     document.getElementById('statusMain').innerText = '● OPENWRT FOUND: ' + ip;
     document.getElementById('statusMain').style.color = '#52D6A3';
     document.getElementById('statusSub').innerText = 'Dropbear SSH Ready · Port 22 Open';
 
-    // 4. Render cards
     renderCards();
 
-    // 5. Automatically popup connect dialog!
     setTimeout(() => {
       openModal(device);
     }, 450);
@@ -942,6 +1193,79 @@ const HTML_PAGE = `<!DOCTYPE html>
     document.getElementById('connectModal').style.display = 'none';
   }
 
+  // CONNECT ACTION -> OPENS THE DASHBOARD SCREEN!
+  function connectToRouterDashboard() {
+    closeModal();
+    const device = currentSelected || {
+      ip: '192.168.1.1',
+      hostname: 'OpenWrt-Gateway',
+      source: 'LAN',
+      port: 22
+    };
+
+    // Transition from scanner to dashboard
+    document.getElementById('scannerScreen').classList.add('hidden');
+    document.getElementById('dashboardScreen').classList.remove('hidden');
+
+    // Populate Top Section
+    document.getElementById('dashRouterName').innerText = device.hostname || 'OpenWrt Router';
+    document.getElementById('dashRouterModel').innerText = (device.source === 'TAILSCALE' ? 'Tailscale Node' : 'MediaTek MT7981') + ' · OpenWrt 23.05.3';
+    document.getElementById('dashIpBadge').innerText = \`\${device.ip} : \${device.port || 22}\`;
+
+    uptimeSec = 124890 + Math.floor(Math.random() * 50000);
+    updateDashboardUI();
+
+    clearInterval(liveTimer);
+    liveTimer = setInterval(() => {
+      uptimeSec += 1;
+      updateUptimeString();
+    }, 1000);
+
+    showToast('✓ Connected to ' + (device.hostname || device.ip));
+  }
+
+  function backToScanner() {
+    clearInterval(liveTimer);
+    document.getElementById('dashboardScreen').classList.add('hidden');
+    document.getElementById('scannerScreen').classList.remove('hidden');
+  }
+
+  function updateUptimeString() {
+    const days = Math.floor(uptimeSec / 86400);
+    const hours = Math.floor((uptimeSec % 86400) / 3600);
+    const mins = Math.floor((uptimeSec % 3600) / 60);
+    const secs = uptimeSec % 60;
+    document.getElementById('dashUptime').innerText = \`\${days}d \${hours}h \${mins}m \${secs}s\`;
+  }
+
+  function updateDashboardUI() {
+    updateUptimeString();
+
+    const temp = (46.5 + Math.random() * 2.5).toFixed(1);
+    document.getElementById('dashTemp').innerText = temp + '°C';
+
+    const ramUsed = Math.floor(180 + Math.random() * 25);
+    const ramTotal = 512;
+    const ramPct = Math.round((ramUsed / ramTotal) * 100);
+    document.getElementById('dashRamBadge').innerText = ramPct + '% USED';
+    document.getElementById('dashRamProgress').style.width = ramPct + '%';
+    document.getElementById('dashRamUsed').innerText = \`Used: \${ramUsed} MB / \${ramTotal} MB\`;
+    document.getElementById('dashRamFree').innerText = \`Free: \${ramTotal - ramUsed} MB\`;
+
+    const storageUsed = 46.2;
+    const storageTotal = 128;
+    const storagePct = Math.round((storageUsed / storageTotal) * 100);
+    document.getElementById('dashStorageBadge').innerText = storagePct + '% USED';
+    document.getElementById('dashStorageProgress').style.width = storagePct + '%';
+    document.getElementById('dashStorageUsed').innerText = \`Used: \${storageUsed} MB / \${storageTotal} MB\`;
+    document.getElementById('dashStorageFree').innerText = \`Available: \${(storageTotal - storageUsed).toFixed(1)} MB\`;
+  }
+
+  function refreshDashboardStats() {
+    showToast('Polling live ubus & thermal stats…');
+    updateDashboardUI();
+  }
+
   function copySshCmd() {
     const user = document.getElementById('sshUser').value.trim() || 'root';
     const port = document.getElementById('sshPort').value || 22;
@@ -955,11 +1279,11 @@ const HTML_PAGE = `<!DOCTYPE html>
     });
   }
 
-  function connectSsh() {
+  function launchTerminalApp() {
     const user = document.getElementById('sshUser').value.trim() || 'root';
     const port = document.getElementById('sshPort').value || 22;
     const ip = currentSelected ? currentSelected.ip : '192.168.1.1';
-    showToast(\`Connecting: ssh://\${user}@\${ip}:\${port}\`);
+    showToast(\`Launching: ssh://\${user}@\${ip}:\${port}\`);
     window.location.href = \`ssh://\${user}@\${ip}:\${port}\`;
   }
 

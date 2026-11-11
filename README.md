@@ -33,10 +33,21 @@ When an OpenWrt router is detected, the app renders a smooth **radar lock-on ani
   - Pre-fills default OpenWrt username: `root`.
   - Password input field with show/hide toggle.
   - One-tap buttons:
-    - **Connect via SSH**: Launches external SSH clients (ConnectBot, Termux, JuiceSSH) via `ssh://` intent.
+    - **Connect to Router**: Launches the dedicated Router Dashboard UI.
     - **Verify SSH Port**: Runs an instant socket test to verify port 22 state.
     - **Open LuCI Web UI**: Launches router web dashboard (`http://<ip>/`) in browser.
+    - **Launch Terminal**: Opens external SSH clients (ConnectBot, Termux, JuiceSSH) via `ssh://`.
     - **Copy SSH Command**: Copies `ssh root@<ip>` to system clipboard.
+- **Router Dashboard UI (Post-Connect)**:
+  - **Top Section**:
+    - Router Name & Architecture / Hardware model (e.g. `MediaTek MT7981 · OpenWrt 23.05.3`).
+    - Real-time Uptime counter (e.g. `14d 6h 23m 41s`).
+    - Temperature display (`°C`) with color-coded status (Optimal, Warm, High).
+  - **Middle Section**:
+    - **RAM (System Memory)**: Visual gradient progress bar, Total RAM, Used RAM, Free RAM, and percentage.
+    - **Flash Storage (Overlay)**: Visual gradient progress bar, Total Overlay size, Used storage, Available storage, and percentage.
+  - **Bottom Section**:
+    - Quick actions: Refresh Stats (live ubus poll), Open LuCI Web, Launch SSH Terminal, and Disconnect.
 
 ---
 
@@ -50,15 +61,18 @@ openwrt/
 ├── app/
 │   ├── build.gradle.kts           # App Gradle config (SDK 35, Java 17)
 │   └── src/main/
-│       ├── AndroidManifest.xml    # Permissions (INTERNET, VIBRATE, WIFI)
+│       ├── AndroidManifest.xml    # Permissions & Activity declarations
 │       ├── java/com/lemonrsh/openwrt/
-│       │   ├── MainActivity.kt    # Main activity with cyber dark theme
+│       │   ├── MainActivity.kt    # Main activity with radar scanner
+│       │   ├── RouterDashboardActivity.kt # Dashboard UI (Name, Uptime, Temp, RAM, Storage)
 │       │   ├── model/
-│       │   │   └── RouterDevice.kt# Router & scan progress data models
+│       │   │   ├── RouterDevice.kt# Router & scan progress data models
+│       │   │   └── RouterStats.kt # System stats (Uptime, Temp, RAM, Storage)
 │       │   ├── scanner/
 │       │   │   ├── LanScanner.kt  # ARP & subnet multithreaded scanner
 │       │   │   ├── TailscaleScanner.kt # Root Tailscale daemon query
-│       │   │   └── OpenWrtProbe.kt# Dropbear banner & LuCI HTTP probe
+│       │   │   ├── OpenWrtProbe.kt# Dropbear banner & LuCI HTTP probe
+│       │   │   └── OpenWrtClient.kt # LuCI ubus JSON-RPC & metrics reader
 │       │   ├── ui/
 │       │   │   ├── RadarScanView.kt # Hardware-accelerated radar view
 │       │   │   └── ConnectDialog.kt # Connection & password popup
