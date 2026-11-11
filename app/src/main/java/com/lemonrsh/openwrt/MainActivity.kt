@@ -43,7 +43,7 @@ import java.util.concurrent.Executors
 class MainActivity : Activity() {
 
     private val bg = Color.rgb(11, 16, 32)
-    private val card = Color.rgb(22, 30, 51)
+    private val cardColor = Color.rgb(22, 30, 51)
     private val cardFound = Color.rgb(26, 38, 64)
     private val cardSelected = Color.rgb(18, 28, 52)
     private val inputBg = Color.rgb(26, 38, 68)
@@ -494,7 +494,7 @@ class MainActivity : Activity() {
         val strokeWidth = if (isSelected) 2 else 1
         val cardBg = if (isSelected) cardSelected else cardFound
 
-        val card = LinearLayout(this).apply {
+        val cardView = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             background = rounded(cardBg, 14, strokeColor, strokeWidth)
             val p = dp(16)
@@ -555,9 +555,9 @@ class MainActivity : Activity() {
 
         topRow.addView(nameCol)
         topRow.addView(sourceBadge)
-        card.addView(topRow)
+        cardView.addView(topRow)
 
-        card.addView(space(8))
+        cardView.addView(space(8))
 
         // Service badge pill
         val serverPill = TextView(this).apply {
@@ -572,10 +572,10 @@ class MainActivity : Activity() {
                 renderDevicesList()
             }
         }
-        card.addView(serverPill)
+        cardView.addView(serverPill)
 
         if (!isSelected) {
-            card.addView(space(10))
+            cardView.addView(space(10))
             val selectPrompt = TextView(this).apply {
                 text = "TAP TO SELECT & LOG IN →"
                 setTextColor(blue)
@@ -583,21 +583,21 @@ class MainActivity : Activity() {
                 typeface = Typeface.create("sans-serif-medium", Typeface.BOLD)
                 letterSpacing = 0.05f
             }
-            card.addView(selectPrompt)
-            card.setOnClickListener {
+            cardView.addView(selectPrompt)
+            cardView.setOnClickListener {
                 HapticHelper.vibrateTick(this@MainActivity)
                 selectedDevice = device
                 renderDevicesList()
             }
-            return card
+            return cardView
         }
 
         // ==========================================
         // INLINE LOGIN PANEL (NO POP-UP NEEDED!)
         // ==========================================
-        card.addView(space(12))
-        card.addView(divider())
-        card.addView(space(12))
+        cardView.addView(space(12))
+        cardView.addView(divider())
+        cardView.addView(space(12))
 
         // Auto-accept Certificate & SSH Key Notice
         val certNotice = LinearLayout(this).apply {
@@ -622,13 +622,13 @@ class MainActivity : Activity() {
 
         certNotice.addView(certIcon)
         certNotice.addView(certText)
-        card.addView(certNotice)
+        cardView.addView(certNotice)
 
-        card.addView(space(12))
+        cardView.addView(space(12))
 
         // Username Field
-        card.addView(label("SSH USERNAME"))
-        card.addView(space(4))
+        cardView.addView(label("SSH USERNAME"))
+        cardView.addView(space(4))
 
         val currentUsername = routerUsernames[device.ip] ?: "root"
         val usernameInput = EditText(this).apply {
@@ -654,9 +654,9 @@ class MainActivity : Activity() {
                 override fun afterTextChanged(s: Editable?) {}
             })
         }
-        card.addView(usernameInput)
+        cardView.addView(usernameInput)
 
-        card.addView(space(10))
+        cardView.addView(space(10))
 
         // Password Header with SHOW/HIDE Toggle
         val passHeader = LinearLayout(this).apply {
@@ -682,9 +682,9 @@ class MainActivity : Activity() {
 
         passHeader.addView(passLabel)
         passHeader.addView(toggleBtn)
-        card.addView(passHeader)
+        cardView.addView(passHeader)
 
-        card.addView(space(4))
+        cardView.addView(space(4))
 
         val currentPassword = routerPasswords[device.ip] ?: ""
         val passwordInput = EditText(this).apply {
@@ -739,13 +739,13 @@ class MainActivity : Activity() {
             passwordInput.setSelection(passwordInput.text.length)
         }
 
-        card.addView(passwordInput)
+        cardView.addView(passwordInput)
 
-        card.addView(space(10))
+        cardView.addView(space(10))
 
         // Port Field
-        card.addView(label("SSH PORT"))
-        card.addView(space(4))
+        cardView.addView(label("SSH PORT"))
+        cardView.addView(space(4))
 
         val currentPort = routerPorts[device.ip] ?: device.port
         val portInput = EditText(this).apply {
@@ -770,9 +770,9 @@ class MainActivity : Activity() {
                 override fun afterTextChanged(s: Editable?) {}
             })
         }
-        card.addView(portInput)
+        cardView.addView(portInput)
 
-        card.addView(space(12))
+        cardView.addView(space(12))
 
         // Status Feedback View
         val cardStatusLabel = TextView(this).apply {
@@ -781,9 +781,9 @@ class MainActivity : Activity() {
             textSize = 12f
             gravity = Gravity.CENTER_HORIZONTAL
         }
-        card.addView(cardStatusLabel)
+        cardView.addView(cardStatusLabel)
 
-        card.addView(space(14))
+        cardView.addView(space(14))
 
         // PRIMARY ACTION: LOGIN & CONNECT
         val loginBtn = Button(this).apply {
@@ -801,9 +801,9 @@ class MainActivity : Activity() {
                 loginAndConnect(device, user, pass, port)
             }
         }
-        card.addView(loginBtn)
+        cardView.addView(loginBtn)
 
-        card.addView(space(8))
+        cardView.addView(space(8))
 
         // SECONDARY ACTIONS: Test SSH & Open LuCI
         val actionRow = LinearLayout(this).apply {
@@ -814,7 +814,7 @@ class MainActivity : Activity() {
             text = "Verify SSH Port"
             setTextColor(cyan)
             textSize = 12f
-            background = rounded(card, 8, cyan, 1)
+            background = rounded(cardColor, 8, cyan, 1)
             val p = dp(10)
             setPadding(p, p, p, p)
             layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
@@ -843,7 +843,7 @@ class MainActivity : Activity() {
             text = "Open LuCI Web"
             setTextColor(blue)
             textSize = 12f
-            background = rounded(card, 8, blue, 1)
+            background = rounded(cardColor, 8, blue, 1)
             val p = dp(10)
             setPadding(p, p, p, p)
             val lp = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
@@ -856,9 +856,9 @@ class MainActivity : Activity() {
 
         actionRow.addView(testBtn)
         actionRow.addView(luciBtn)
-        card.addView(actionRow)
+        cardView.addView(actionRow)
 
-        card.addView(space(8))
+        cardView.addView(space(8))
 
         // TERTIARY ROW: Launch External Terminal & Copy SSH Command
         val bottomRow = LinearLayout(this).apply {
@@ -898,9 +898,9 @@ class MainActivity : Activity() {
 
         bottomRow.addView(terminalBtn)
         bottomRow.addView(copyBtn)
-        card.addView(bottomRow)
+        cardView.addView(bottomRow)
 
-        return card
+        return cardView
     }
 
     private fun loginAndConnect(device: RouterDevice, user: String, pass: String, port: Int) {
@@ -950,7 +950,7 @@ class MainActivity : Activity() {
         val emptyCard = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             gravity = Gravity.CENTER
-            background = rounded(card, 12, Color.rgb(32, 44, 72), 1)
+            background = rounded(cardColor, 12, Color.rgb(32, 44, 72), 1)
             val p = dp(24)
             setPadding(p, p, p, p)
             layoutParams = LinearLayout.LayoutParams(
