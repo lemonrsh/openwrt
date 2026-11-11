@@ -583,8 +583,15 @@ class MainActivity : Activity() {
         devicesContainer.addView(emptyCard)
     }
 
+    private var activeDialog: ConnectDialog? = null
+
     private fun showConnectDialog(device: RouterDevice) {
+        if (isFinishing || isDestroyed) return
+        if (activeDialog?.isShowing == true) return
+
         val dialog = ConnectDialog(this, device)
+        activeDialog = dialog
+        dialog.setOnDismissListener { activeDialog = null }
         dialog.show()
     }
 

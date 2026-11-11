@@ -441,28 +441,30 @@ const HTML_PAGE = `<!DOCTYPE html>
   .modal-overlay {
     position: absolute;
     top: 0; left: 0; right: 0; bottom: 0;
-    background: rgba(4, 7, 16, 0.85);
-    backdrop-filter: blur(6px);
+    background: rgba(4, 7, 16, 0.88);
+    backdrop-filter: blur(8px);
     display: none;
-    align-items: flex-end;
+    align-items: center;
     justify-content: center;
     z-index: 100;
+    padding: 16px;
     animation: fadeIn 0.25s ease;
   }
   @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
 
   .modal-sheet {
     width: 100%;
+    max-width: 390px;
     background: #141D33;
-    border-top: 1.5px solid #2B3D66;
-    border-radius: 24px 24px 0 0;
-    padding: 24px 22px 28px 22px;
-    box-shadow: 0 -10px 40px rgba(0, 0, 0, 0.7);
+    border: 1.5px solid #2B3D66;
+    border-radius: 20px;
+    padding: 22px 20px;
+    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.85);
     animation: sheetUp 0.3s cubic-bezier(0.16, 1, 0.3, 1);
   }
   @keyframes sheetUp {
-    from { transform: translateY(100%); }
-    to { transform: translateY(0); }
+    from { transform: translateY(20px) scale(0.95); opacity: 0; }
+    to { transform: translateY(0) scale(1); opacity: 1; }
   }
 
   .modal-header {
@@ -488,10 +490,13 @@ const HTML_PAGE = `<!DOCTYPE html>
     background: #1D2A48;
     border: 1px solid #2A3C64;
     border-radius: 8px;
-    padding: 10px 12px;
+    padding: 11px 12px;
     color: var(--text-white);
-    font-size: 13px;
+    font-size: 14px;
     outline: none;
+    user-select: text !important;
+    -webkit-user-select: text !important;
+    pointer-events: auto !important;
     transition: border 0.2s;
   }
   .input-field:focus { border-color: var(--accent-cyan); }
@@ -738,6 +743,7 @@ const HTML_PAGE = `<!DOCTYPE html>
     box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
     display: none;
     z-index: 200;
+    pointer-events: none;
   }
 </style>
 </head>
@@ -897,12 +903,15 @@ const HTML_PAGE = `<!DOCTYPE html>
       </div>
 
       <label class="input-label">SSH USERNAME</label>
-      <input type="text" class="input-field" id="sshUser" value="root">
+      <input type="text" class="input-field" id="sshUser" value="root" autocomplete="username" autocapitalize="none" spellcheck="false">
 
       <div class="row-2">
         <div>
-          <label class="input-label">SSH PASSWORD</label>
-          <input type="password" class="input-field" id="sshPass" placeholder="Router password">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 10px; margin-bottom: 4px;">
+            <label class="input-label" style="margin: 0;">SSH PASSWORD</label>
+            <span onclick="toggleWebPass()" id="toggleWebPassBtn" style="font-size: 11px; font-weight: 700; color: var(--accent-cyan); cursor: pointer; user-select: none;">👁 SHOW</span>
+          </div>
+          <input type="password" class="input-field" id="sshPass" placeholder="Router password" autocomplete="current-password" onkeydown="if(event.key==='Enter') connectToRouterDashboard()">
         </div>
         <div>
           <label class="input-label">PORT</label>
@@ -1178,6 +1187,19 @@ const HTML_PAGE = `<!DOCTYPE html>
     });
   }
 
+  function toggleWebPass() {
+    const pass = document.getElementById('sshPass');
+    const btn = document.getElementById('toggleWebPassBtn');
+    if (!pass || !btn) return;
+    if (pass.type === 'password') {
+      pass.type = 'text';
+      btn.innerText = '🔒 HIDE';
+    } else {
+      pass.type = 'password';
+      btn.innerText = '👁 SHOW';
+    }
+  }
+
   function openModal(device) {
     currentSelected = device;
     document.getElementById('modalDeviceTitle').innerText = device.hostname || 'OpenWrt Router';
@@ -1187,6 +1209,15 @@ const HTML_PAGE = `<!DOCTYPE html>
     document.getElementById('modalBannerText').innerText = \`\${device.banner} · LuCI Web UI on Port 80\`;
     document.getElementById('sshPort').value = device.port || 22;
     document.getElementById('connectModal').style.display = 'flex';
+
+    // Auto-focus password input for immediate typing
+    setTimeout(() => {
+      const pass = document.getElementById('sshPass');
+      if (pass) {
+        pass.focus();
+        pass.select();
+      }
+    }, 150);
   }
 
   function closeModal() {

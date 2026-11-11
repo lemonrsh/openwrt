@@ -10,15 +10,20 @@ import android.graphics.Typeface
 import android.graphics.drawable.ColorDrawable
 import android.graphics.drawable.GradientDrawable
 import android.net.Uri
+import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
 import android.text.InputType
+import android.text.method.PasswordTransformationMethod
 import android.view.Gravity
 import android.view.View
 import android.view.Window
+import android.view.WindowManager
+import android.view.inputmethod.EditorInfo
+import android.view.inputmethod.InputMethodManager
 import android.widget.Button
 import android.widget.EditText
-import android.widget.ImageView
+import android.widget.FrameLayout
 import android.widget.LinearLayout
 import android.widget.ScrollView
 import android.widget.TextView
@@ -35,7 +40,7 @@ class ConnectDialog(
 
     private val bgDark = Color.rgb(14, 20, 36)
     private val cardDark = Color.rgb(22, 32, 56)
-    private val inputBg = Color.rgb(28, 40, 70)
+    private val inputBg = Color.rgb(26, 38, 68)
     private val textWhite = Color.rgb(241, 245, 255)
     private val textMuted = Color.rgb(151, 163, 190)
     private val accentCyan = Color.rgb(0, 229, 255)
@@ -48,23 +53,50 @@ class ConnectDialog(
     private lateinit var usernameInput: EditText
     private lateinit var passwordInput: EditText
     private lateinit var portInput: EditText
+    private lateinit var togglePassBtn: TextView
     private lateinit var statusLabel: TextView
     private lateinit var testButton: Button
 
-    init {
+    private var isPasswordVisible = false
+
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
         requestWindowFeature(Window.FEATURE_NO_TITLE)
-        window?.setBackgroundDrawable(ColorDrawable(Color.TRANSPARENT))
+
+        window?.apply {
+            setBackgroundDrawable(ColorDrawable(Color.TRANSPARENT))
+            // Ensure keyboard resizes and can be shown properly
+            setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE or WindowManager.LayoutParams.SOFT_INPUT_STATE_ALWAYS_VISIBLE)
+            clearFlags(WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or WindowManager.LayoutParams.FLAG_ALT_FOCUSABLE_IM)
+        }
+
         setupView()
+
+        setOnShowListener {
+            val metrics = context.resources.displayMetrics
+            window?.setLayout(
+                (metrics.widthPixels * 0.92).toInt(),
+                WindowManager.LayoutParams.WRAP_CONTENT
+            )
+            // Auto focus password or show keyboard
+            passwordInput.requestFocus()
+            mainHandler.postDelayed({
+                try {
+                    val imm = context.getSystemService(Context.INPUT_METHOD_SERVICE) as? InputMethodManager
+                    imm?.showSoftInput(passwordInput, InputMethodManager.SHOW_IMPLICIT)
+                } catch (_: Exception) {}
+            }, 150)
+        }
     }
 
     private fun setupView() {
         val root = LinearLayout(context).apply {
             orientation = LinearLayout.VERTICAL
             background = rounded(bgDark, 20, Color.rgb(45, 60, 95), 2)
-            val pad = dp(22)
+            val pad = dp(20)
             setPadding(pad, pad, pad, pad)
             layoutParams = LinearLayout.LayoutParams(
-                (context.resources.displayMetrics.widthPixels * 0.90).toInt(),
+                LinearLayout.LayoutParams.MATCH_PARENT,
                 LinearLayout.LayoutParams.WRAP_CONTENT
             )
         }
@@ -128,7 +160,6 @@ class ConnectDialog(
         header.addView(sourceBadge)
         content.addView(header)
 
-        // Divider
         content.addView(space(14))
         content.addView(divider())
         content.addView(space(14))
@@ -170,28 +201,66 @@ class ConnectDialog(
             setHintTextColor(textMuted)
             textSize = 14f
             background = rounded(inputBg, 8, Color.rgb(40, 56, 96), 1)
-            val p = dp(11)
+            val p = dp(12)
             setPadding(p, p, p, p)
-            inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_VISIBLE_PASSWORD
+            isFocusable = true
+            isFocusableInTouchMode = true
+            isClickable = true
+            isCursorVisible = true
+            inputType = InputType.TYPE_CLASS_TEXT
+            imeOptions = EditorInfo.IME_ACTION_NEXT
             setSingleLine(true)
         }
         content.addView(usernameInput)
 
         content.addView(space(12))
 
-        // Password
-        content.addView(label("SSH PASSWORD"))
+        // Password with show/hide toggle
+        val passHeader = LinearLayout(context).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+        }
+        val passLabel = label("SSH PASSWORD").apply {
+            layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
+        }
+        togglePassBtn = TextView(context).apply {
+            text = "👁 SHOW"
+            textSize = 11f
+            setTextColor(accentCyan)
+            typeface = Typeface.create("sans-serif-medium", Typeface.BOLD)
+            val pX = dp(6)
+            val pY = dp(2)
+            setPadding(pX, pY, pX, pY)
+            setOnClickListener { togglePasswordVisibility() }
+        }
+        passHeader.addView(passLabel)
+        passHeader.addView(togglePassBtn)
+        content.addView(passHeader)
+
         content.addView(space(4))
+
         passwordInput = EditText(context).apply {
             hint = "Enter OpenWrt password (or leave empty)"
             setTextColor(textWhite)
             setHintTextColor(Color.rgb(100, 115, 145))
             textSize = 14f
             background = rounded(inputBg, 8, Color.rgb(40, 56, 96), 1)
-            val p = dp(11)
+            val p = dp(12)
             setPadding(p, p, p, p)
+            isFocusable = true
+            isFocusableInTouchMode = true
+            isClickable = true
+            isCursorVisible = true
             inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD
+            transformationMethod = PasswordTransformationMethod.getInstance()
+            imeOptions = EditorInfo.IME_ACTION_DONE
             setSingleLine(true)
+            setOnEditorActionListener { _, actionId, _ ->
+                if (actionId == EditorInfo.IME_ACTION_DONE) {
+                    openDashboard()
+                    true
+                } else false
+            }
         }
         content.addView(passwordInput)
 
@@ -206,8 +275,12 @@ class ConnectDialog(
             setHintTextColor(textMuted)
             textSize = 14f
             background = rounded(inputBg, 8, Color.rgb(40, 56, 96), 1)
-            val p = dp(11)
+            val p = dp(12)
             setPadding(p, p, p, p)
+            isFocusable = true
+            isFocusableInTouchMode = true
+            isClickable = true
+            isCursorVisible = true
             inputType = InputType.TYPE_CLASS_NUMBER
             setSingleLine(true)
         }
@@ -217,7 +290,7 @@ class ConnectDialog(
 
         // Status Label for SSH testing
         statusLabel = TextView(context).apply {
-            text = "Enter credentials to connect via SSH or open LuCI"
+            text = "Enter credentials to connect to router dashboard"
             setTextColor(textMuted)
             textSize = 12f
             gravity = Gravity.CENTER_HORIZONTAL
@@ -323,6 +396,18 @@ class ConnectDialog(
         setContentView(root)
     }
 
+    private fun togglePasswordVisibility() {
+        isPasswordVisible = !isPasswordVisible
+        if (isPasswordVisible) {
+            passwordInput.transformationMethod = null
+            togglePassBtn.text = "🔒 HIDE"
+        } else {
+            passwordInput.transformationMethod = PasswordTransformationMethod.getInstance()
+            togglePassBtn.text = "👁 SHOW"
+        }
+        passwordInput.setSelection(passwordInput.text.length)
+    }
+
     private fun openDashboard() {
         val user = usernameInput.text.toString().trim().ifBlank { "root" }
         val pass = passwordInput.text.toString()
@@ -342,7 +427,6 @@ class ConnectDialog(
     }
 
     private fun testSshConnection() {
-        val user = usernameInput.text.toString().trim().ifBlank { "root" }
         val port = portInput.text.toString().toIntOrNull() ?: 22
         statusLabel.text = "Testing SSH connection to ${router.ip}:$port…"
         statusLabel.setTextColor(accentCyan)
@@ -377,7 +461,6 @@ class ConnectDialog(
             Toast.makeText(context, "Opening SSH client…", Toast.LENGTH_SHORT).show()
             dismiss()
         } catch (_: Exception) {
-            // If no app directly handles ssh:// scheme, try Termux or prompt copy
             copySshCommand()
             Toast.makeText(
                 context,
