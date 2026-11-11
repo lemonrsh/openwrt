@@ -155,7 +155,7 @@ class LanScanner(private val context: Context) {
             val file = File("/proc/net/route")
             if (file.exists() && file.canRead()) {
                 BufferedReader(FileReader(file)).use { reader ->
-                    var line: String?
+                    var line: String? = null
                     while (reader.readLine().also { line = it } != null) {
                         val tokens = line!!.split("\\s+".toRegex())
                         if (tokens.size >= 3 && tokens[1] == "00000000") {
@@ -201,7 +201,7 @@ class LanScanner(private val context: Context) {
                 BufferedReader(FileReader(arpFile)).use { reader ->
                     // Skip header line
                     reader.readLine()
-                    var line: String?
+                    var line: String? = null
                     while (reader.readLine().also { line = it } != null) {
                         val parts = line!!.split("\\s+".toRegex())
                         if (parts.size >= 4) {

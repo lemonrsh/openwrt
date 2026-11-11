@@ -57,7 +57,7 @@ object RootHelper {
             val outThread = Thread {
                 try {
                     BufferedReader(InputStreamReader(process.inputStream)).use { reader ->
-                        var line: String?
+                        var line: String? = null
                         while (reader.readLine().also { line = it } != null) {
                             stdoutBuilder.append(line).append("\n")
                         }
@@ -68,7 +68,7 @@ object RootHelper {
             val errThread = Thread {
                 try {
                     BufferedReader(InputStreamReader(process.errorStream)).use { reader ->
-                        var line: String?
+                        var line: String? = null
                         while (reader.readLine().also { line = it } != null) {
                             stderrBuilder.append(line).append("\n")
                         }

@@ -83,7 +83,7 @@ object OpenWrtProbe {
                     val sb = StringBuilder()
                     val reader = BufferedReader(InputStreamReader(conn.inputStream))
                     var linesRead = 0
-                    var line: String?
+                    var line: String? = null
                     while (linesRead < 40 && reader.readLine().also { line = it } != null) {
                         sb.append(line).append(" ")
                         linesRead++
