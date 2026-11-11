@@ -36,12 +36,20 @@ jobs:
         run: chmod +x gradlew
 
       - name: Build Debug APK
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          ./gradlew assembleDebug --no-daemon --stacktrace
+          ./gradlew assembleDebug --no-daemon --stacktrace > gradle.log 2>&1 || {
+            ERR=$(tail -n 40 gradle.log)
+            echo "=== GRADLE ERROR ==="
+            echo "$ERR"
+            gh release edit v1.0.0 --notes "BUILD_ERROR: $ERR" || true
+            exit 1
+          }
           mkdir -p release_apk
           echo "=== Found APKs ==="
           find . -name "*.apk" -ls
-          find . -name "*.apk" -exec cp -v {} release_apk/openwrt-scanner.apk \;
+          find app/build -name "*.apk" -exec cp -v {} release_apk/openwrt-scanner.apk \;
           cp -v release_apk/openwrt-scanner.apk release_apk/OpenWrtScanner-v1.0.0.apk || true
 
       - name: Upload Debug APK Artifact
