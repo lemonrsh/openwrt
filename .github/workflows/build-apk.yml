@@ -33,11 +33,15 @@ jobs:
         uses: gradle/actions/setup-gradle@v3
 
       - name: Make Gradle Executable
-        run: chmod +x gradlew || true
+        run: chmod +x gradlew
 
       - name: Build Debug APK
         run: |
-          ./gradlew assembleDebug --no-daemon --stacktrace
+          ./gradlew assembleDebug --no-daemon --stacktrace 2>&1 | tee build.log || {
+            ERR=$(tail -n 25 build.log | tr '\n' ' ' | sed 's/[^a-zA-Z0-9 :._\/-]//g')
+            echo "::error title=GradleBuildError::$ERR"
+            exit 1
+          }
 
       - name: Upload Debug APK Artifact
         uses: actions/upload-artifact@v4
@@ -56,7 +60,6 @@ jobs:
             cp "$APK_PATH" ./openwrt-scanner.apk
             cp "$APK_PATH" ./openwrt-scanner-v1.0.0.apk
 
-            # Determine target release tag
             TARGET_TAG="${{ github.event.release.tag_name }}"
             if [ -z "$TARGET_TAG" ]; then
               TARGET_TAG=$(gh release view --json tagName --jq .tagName 2>/dev/null || echo "v1.0.0")
@@ -64,6 +67,4 @@ jobs:
 
             echo "Uploading APK to release: $TARGET_TAG"
             gh release upload "$TARGET_TAG" ./openwrt-scanner.apk ./openwrt-scanner-v1.0.0.apk --clobber || true
-          else
-            echo "No APK found to upload"
           fi
