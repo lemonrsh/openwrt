@@ -5,16 +5,23 @@ on:
     branches: [ "**" ]
   pull_request:
     branches: [ "**" ]
+  release:
+    types: [ published, created ]
   workflow_dispatch:
+
+permissions:
+  contents: write
 
 jobs:
   build:
-    name: Build Debug APK
+    name: Build & Release APK
     runs-on: ubuntu-latest
 
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Set up JDK 17
         uses: actions/setup-java@v4
@@ -30,15 +37,33 @@ jobs:
 
       - name: Build Debug APK
         run: |
-          if [ -f "./gradlew" ]; then
-            ./gradlew assembleDebug --no-daemon --stacktrace
-          else
-            gradle assembleDebug --no-daemon --stacktrace
-          fi
+          ./gradlew assembleDebug --no-daemon --stacktrace
 
-      - name: Upload Debug APK
+      - name: Upload Debug APK Artifact
         uses: actions/upload-artifact@v4
         with:
           name: openwrt-scanner-debug-apk
           path: app/build/outputs/apk/debug/*.apk
           if-no-files-found: error
+
+      - name: Attach APK to GitHub Release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          APK_PATH=$(find app/build/outputs/apk/debug -name "*.apk" | head -n 1)
+          if [ -n "$APK_PATH" ] && [ -f "$APK_PATH" ]; then
+            echo "Found compiled APK: $APK_PATH"
+            cp "$APK_PATH" ./openwrt-scanner.apk
+            cp "$APK_PATH" ./openwrt-scanner-v1.0.0.apk
+
+            # Determine target release tag
+            TARGET_TAG="${{ github.event.release.tag_name }}"
+            if [ -z "$TARGET_TAG" ]; then
+              TARGET_TAG=$(gh release view --json tagName --jq .tagName 2>/dev/null || echo "v1.0.0")
+            fi
+
+            echo "Uploading APK to release: $TARGET_TAG"
+            gh release upload "$TARGET_TAG" ./openwrt-scanner.apk ./openwrt-scanner-v1.0.0.apk --clobber || true
+          else
+            echo "No APK found to upload"
+          fi
