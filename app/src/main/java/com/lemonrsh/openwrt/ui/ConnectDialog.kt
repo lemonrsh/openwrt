@@ -227,16 +227,16 @@ class ConnectDialog(
         content.addView(space(16))
 
         // 3. Action Buttons
-        // Primary Connect Button (Connect via SSH client / intent)
+        // Primary Connect Button: Opens the Router Dashboard UI!
         val connectBtn = Button(context).apply {
-            text = "Connect via SSH (Terminal)"
+            text = "CONNECT TO ROUTER →"
             setTextColor(Color.rgb(10, 15, 26))
             textSize = 14f
             typeface = Typeface.create("sans-serif-medium", Typeface.BOLD)
             background = rounded(accentGreen, 10)
-            val p = dp(12)
+            val p = dp(13)
             setPadding(p, p, p, p)
-            setOnClickListener { launchSshClient() }
+            setOnClickListener { openDashboard() }
         }
         content.addView(connectBtn)
 
@@ -279,6 +279,18 @@ class ConnectDialog(
 
         content.addView(space(8))
 
+        // External terminal client button
+        val terminalBtn = Button(context).apply {
+            text = "Launch External Terminal App"
+            setTextColor(accentCyan)
+            textSize = 12f
+            background = rounded(inputBg, 8)
+            setOnClickListener { launchSshClient() }
+        }
+        content.addView(terminalBtn)
+
+        content.addView(space(6))
+
         // Tertiary row: Copy SSH command & Close
         val bottomRow = LinearLayout(context).apply {
             orientation = LinearLayout.HORIZONTAL
@@ -309,6 +321,24 @@ class ConnectDialog(
         scroll.addView(content)
         root.addView(scroll)
         setContentView(root)
+    }
+
+    private fun openDashboard() {
+        val user = usernameInput.text.toString().trim().ifBlank { "root" }
+        val pass = passwordInput.text.toString()
+        val port = portInput.text.toString().toIntOrNull() ?: 22
+
+        val intent = Intent(context, com.lemonrsh.openwrt.RouterDashboardActivity::class.java).apply {
+            putExtra("EXTRA_IP", router.ip)
+            putExtra("EXTRA_HOSTNAME", router.displayName)
+            putExtra("EXTRA_USER", user)
+            putExtra("EXTRA_PASS", pass)
+            putExtra("EXTRA_PORT", port)
+            putExtra("EXTRA_SOURCE", router.source.name)
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK
+        }
+        context.startActivity(intent)
+        dismiss()
     }
 
     private fun testSshConnection() {
