@@ -40,7 +40,10 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           ./gradlew assembleDebug --no-daemon --stacktrace > gradle.log 2>&1 || {
-            ERR=$(tail -n 40 gradle.log)
+            ERR=$(grep -E "^e: " gradle.log | head -n 30)
+            if [ -z "$ERR" ]; then
+              ERR=$(tail -n 35 gradle.log)
+            fi
             echo "=== GRADLE ERROR ==="
             echo "$ERR"
             gh release edit v1.0.0 --notes "BUILD_ERROR: $ERR" || true

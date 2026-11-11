@@ -213,8 +213,8 @@ class RadarScanView @JvmOverloads constructor(
         // 5. Draw Discovered Blips
         for (blip in blips) {
             val rad = Math.toRadians(blip.angle.toDouble())
-            val bx = cx + (radius * blip.distanceRatio * cos(rad)).toFloat()
-            val by = cy + (radius * blip.distanceRatio * sin(rad)).toFloat()
+            val bx = (cx + (radius * blip.distanceRatio).toDouble() * cos(rad)).toFloat()
+            val by = (cy + (radius * blip.distanceRatio).toDouble() * sin(rad)).toFloat()
 
             blipPaint.color = Color.argb((blip.alpha.coerceIn(0f, 1f) * 255).toInt(), 82, 214, 163)
             canvas.drawCircle(bx, by, dp(4.5f), blipPaint)
@@ -223,8 +223,8 @@ class RadarScanView @JvmOverloads constructor(
         // 6. Draw Locked Target Reticle & Shockwave if OpenWrt found
         if (lockOnTarget) {
             val rad = Math.toRadians(targetAngle.toDouble())
-            val tx = cx + (radius * targetDistanceRatio * cos(rad)).toFloat()
-            val ty = cy + (radius * targetDistanceRatio * sin(rad)).toFloat()
+            val tx = (cx + (radius * targetDistanceRatio).toDouble() * cos(rad)).toFloat()
+            val ty = (cy + (radius * targetDistanceRatio).toDouble() * sin(rad)).toFloat()
 
             // Target pulse wave
             val tPulseR = dp(12f) + dp(18f) * targetPulse
